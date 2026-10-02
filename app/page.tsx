@@ -1,22 +1,159 @@
 "use client";
-import {useRef,useState} from "react";
-import {Home,WandSparkles,Sparkles,User,Upload,Play,Pause,Download,Plus,Search,Heart,AudioLines} from "lucide-react";
-type Post={id:number;title:string;author:string;tag:string};
-const posts:Post[]=[{id:1,title:"MIDNIGHT DRIVE",author:"@RedzikFN",tag:"#night"},{id:2,title:"SLOWED VIBES",author:"@editmaster",tag:"#slowed"},{id:3,title:"PHONK RUN",author:"@KubaEdit",tag:"#phonk"}];
-const presets=["SLOWED + REVERB","SPEED UP","NIGHTCORE","BASS BOOST","DREAMY","RADIO","PHONK","8D"];
-export default function Page(){
- const [tab,setTab]=useState("home"),[file,setFile]=useState<File|null>(null),[url,setUrl]=useState(""),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1),[volume,setVolume]=useState(1),[query,setQuery]=useState("");
- const audio=useRef<HTMLAudioElement>(null),input=useRef<HTMLInputElement>(null);
- const choose=(f:File)=>{if(!f.type.startsWith("audio/"))return;setFile(f);setUrl(URL.createObjectURL(f));setTab("studio")};
- const toggle=()=>{if(!audio.current)return;audio.current.paused?(audio.current.play(),setPlaying(true)):(audio.current.pause(),setPlaying(false))};
- const download=()=>{if(!url)return;const a=document.createElement("a");a.href=url;a.download=file?.name||"edit.mp3";a.click()};
- const shown=posts.filter(p=>(p.title+p.author+p.tag).toLowerCase().includes(query.toLowerCase()));
- return <main><header><button className="logo" onClick={()=>setTab("home")}>♪ EDIT MUSIC</button><nav>{[["home",<Home/>,"Home"],["studio",<WandSparkles/>,"Studio"],["edittok",<Sparkles/>,"EditTok"],["profile",<User/>,"Profil"]].map(([id,icon,label])=><button className={tab===id?"nav active":"nav"} onClick={()=>setTab(String(id))} key={String(id)}>{icon}{label}</button>)}</nav><button className="upload" onClick={()=>input.current?.click()}><Upload/> Dodaj utwór</button><input hidden ref={input} type="file" accept="audio/*" onChange={e=>e.target.files?.[0]&&choose(e.target.files[0])}/></header>
- {tab==="home"&&<section className="page"><div className="hero"><div><small>⚡ NOWA ERA EDYCJI MUZYKI</small><h1>YOUR SOUND.<br/><em>YOUR EDIT.</em></h1><p>Edytuj muzykę, twórz własne wersje i publikuj je w EditTok.</p><button className="cta" onClick={()=>input.current?.click()}><Plus/> Zacznij edycję</button></div><AudioLines size={180}/></div><h2>Popularne edity</h2><div className="grid">{shown.map(p=><Card key={p.id} p={p}/>)}</div></section>}
- {tab==="studio"&&<section className="page"><h2>Studio</h2>{!file?<div className="drop" onClick={()=>input.current?.click()}><Upload size={45}/><h3>Wrzuć utwór tutaj</h3><p>MP3, WAV, OGG, M4A</p></div>:<><audio ref={audio} src={url}/><div className="player"><button className="play" onClick={toggle}>{playing?<Pause/>:<Play/>}</button><b>{file.name}</b><button className="ghost" onClick={download}><Download/> Oryginał</button></div><div className="presets"><b>Presety</b>{presets.map(x=><button key={x} onClick={()=>x==="SPEED UP"?setSpeed(1.3):x==="SLOWED + REVERB"&&setSpeed(.78)}>{x}</button>)}</div><div className="editor"><Control n="Głośność" v={volume} min={0} max={1.5} set={setVolume}/><Control n="Speed" v={speed} min={.5} max={2} set={setSpeed}/>{["Bass","Treble","Reverb","Echo / Delay","Pitch","Stereo Width"].map(n=><Control key={n} n={n} v={0} min={-1} max={1} set={()=>{}}/>)}</div><button className="cta publish" onClick={()=>setTab("edittok")}><Sparkles/> Publikuj w EditTok</button></>}</section>}
- {tab==="edittok"&&<section className="page"><div className="feedtop"><div><h2>EditTok</h2><p>TikTok, ale dla editów 🎧</p></div><div className="search"><Search/><input placeholder="Szukaj..." value={query} onChange={e=>setQuery(e.target.value)}/></div></div><div className="chips">{["Dla Ciebie","Trending","Nowe","Slowed","Speed Up","Phonk","8D"].map(x=><button key={x}>{x}</button>)}</div><div className="feed">{shown.map(p=><Card key={p.id} p={p} big/>)}</div></section>}
- {tab==="profile"&&<section className="page"><div className="profile"><div className="avatar">R</div><div><h2>RedzikFN</h2><p>@RedzikFN</p><b>3 Editów</b></div></div><h2>Twoje edity</h2><div className="grid">{posts.filter(p=>p.author==="@RedzikFN").map(p=><Card key={p.id} p={p}/>)}</div></section>}
- </main>
+
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+
+type Tab = "home" | "studio" | "edittok" | "profile";
+type Preset = { name: string; emoji: string; speed: number; bass: number; treble: number; reverb: number; echo: number; width: number };
+
+const presets: Preset[] = [
+  { name: "SLOWED + REVERB", emoji: "🌙", speed: .82, bass: 18, treble: -4, reverb: 48, echo: 22, width: 34 },
+  { name: "SPEED UP", emoji: "⚡", speed: 1.28, bass: 4, treble: 5, reverb: 4, echo: 0, width: 12 },
+  { name: "NIGHTCORE", emoji: "💿", speed: 1.2, bass: 0, treble: 12, reverb: 8, echo: 4, width: 18 },
+  { name: "BASS BOOST", emoji: "🔊", speed: 1, bass: 28, treble: 2, reverb: 6, echo: 0, width: 8 },
+  { name: "DREAMY", emoji: "☁️", speed: .94, bass: 8, treble: 5, reverb: 62, echo: 28, width: 52 },
+  { name: "RADIO", emoji: "📻", speed: 1, bass: -12, treble: 14, reverb: 2, echo: 0, width: 0 },
+  { name: "PHONK", emoji: "🕶️", speed: .96, bass: 24, treble: 10, reverb: 12, echo: 3, width: 18 },
+  { name: "8D", emoji: "🌀", speed: 1, bass: 6, treble: 3, reverb: 25, echo: 8, width: 100 },
+];
+
+const demos = [
+  { title: "MIDNIGHT DRIVE", user: "@RedzikFN", tag: "#night", likes: 128, plays: "2.4K" },
+  { title: "SLOWED VIBES", user: "@editmaster", tag: "#slowed", likes: 94, plays: "1.8K" },
+  { title: "PHONK RUN", user: "@KubaEdit", tag: "#phonk", likes: 241, plays: "5.1K" },
+  { title: "DREAM LOOP", user: "@MajaWave", tag: "#dreamy", likes: 67, plays: "903" },
+];
+
+function fmt(sec: number) {
+  if (!Number.isFinite(sec)) return "0:00";
+  return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 }
-function Control({n,v,min,max,set}:{n:string;v:number;min:number;max:number;set:(x:number)=>void}){return <label className="control"><span>{n}<b>{v.toFixed(2)}</b></span><input type="range" min={min} max={max} step=".01" value={v} onChange={e=>set(+e.target.value)}/></label>}
-function Card({p,big=false}:{p:Post;big?:boolean}){const [on,setOn]=useState(false);return <article className={big?"card big":"card"}><div className="cover"><AudioLines size={70}/></div><div className="body"><span>{p.tag}</span><h3>{p.title}</h3><p>{p.author}</p><button className="round" onClick={()=>setOn(!on)}>{on?<Pause/>:<Play/>}</button><small><Heart/> 0 · 0 odtw.</small></div></article>}
+
+export default function Home() {
+  const [tab, setTab] = useState<Tab>("home");
+  const [file, setFile] = useState<File | null>(null);
+  const [url, setUrl] = useState("");
+  const audio = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const [volume, setVolume] = useState(1);
+  const [bass, setBass] = useState(0);
+  const [treble, setTreble] = useState(0);
+  const [reverb, setReverb] = useState(0);
+  const [echo, setEcho] = useState(0);
+  const [pitch, setPitch] = useState(0);
+  const [width, setWidth] = useState(0);
+  const [query, setQuery] = useState("");
+  const [liked, setLiked] = useState<number[]>([]);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+
+  useEffect(() => {
+    const a = audio.current;
+    if (!a) return;
+    a.playbackRate = speed;
+    a.volume = volume;
+  }, [speed, volume]);
+
+  const visibleDemos = useMemo(() => demos.filter(d => `${d.title} ${d.user} ${d.tag}`.toLowerCase().includes(query.toLowerCase())), [query]);
+
+  const chooseFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0];
+    if (!picked) return;
+    if (url) URL.revokeObjectURL(url);
+    setFile(picked);
+    setUrl(URL.createObjectURL(picked));
+    setTab("studio");
+    setCurrent(0);
+    setPlaying(false);
+  };
+
+  const togglePlay = async () => {
+    const a = audio.current;
+    if (!a) return;
+    if (a.paused) { await a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
+  };
+
+  const applyPreset = (p: Preset) => {
+    setSpeed(p.speed); setBass(p.bass); setTreble(p.treble); setReverb(p.reverb); setEcho(p.echo); setWidth(p.width);
+  };
+
+  const downloadOriginal = () => {
+    if (!url || !file) return;
+    const link = document.createElement("a");
+    link.href = url; link.download = file.name; link.click();
+  };
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <button className="brand" onClick={() => setTab("home")}><span>♪</span> EDIT MUSIC</button>
+        <nav>{(["home","studio","edittok","profile"] as Tab[]).map(t =>
+          <button key={t} className={tab === t ? "nav active" : "nav"} onClick={() => setTab(t)}>
+            {t === "home" ? "Home" : t === "studio" ? "Studio" : t === "edittok" ? "EditTok" : "Profil"}
+          </button>)}</nav>
+        <label className="upload-btn">＋ Upload<input type="file" accept="audio/*" onChange={chooseFile} hidden /></label>
+      </header>
+
+      {tab === "home" && <section className="page">
+        <div className="hero">
+          <div className="hero-copy">
+            <span className="pill">THE MUSIC EDITOR + SOCIAL</span>
+            <h1>YOUR SOUND.<br /><em>YOUR EDIT.</em></h1>
+            <p>Edytuj muzykę, twórz własne brzmienie i publikuj edity w jednym miejscu.</p>
+            <div className="hero-actions">
+              <label className="primary">🎧 Start editing<input type="file" accept="audio/*" onChange={chooseFile} hidden /></label>
+              <button className="secondary" onClick={() => setTab("edittok")}>Odkryj EditTok →</button>
+            </div>
+          </div>
+          <div className="hero-card"><div className="vinyl">♪</div><div><b>EDIT MUSIC</b><small>MAKE IT YOURS</small></div><div className="wave-mini">▁▃▆▂▇▃▅▁▆▃▇</div></div>
+        </div>
+        <div className="section-head"><div><span>FEATURES</span><h2>Build your sound</h2></div></div>
+        <div className="feature-grid">
+          {[
+            ["🎛️","Pro controls","Bass, treble, reverb, echo, pitch i stereo width."],
+            ["⚡","Presets","Gotowe brzmienia do szybkiego startu."],
+            ["🎵","EditTok","Publikuj i odkrywaj muzyczne edity."],
+            ["⬇️","Downloads","Pobieraj własne pliki i treści udostępnione przez twórców."]
+          ].map(([i,t,d]) => <article className="feature" key={t}><span>{i}</span><h3>{t}</h3><p>{d}</p></article>)}
+        </div>
+      </section>}
+
+      {tab === "studio" && <section className="page studio-page">
+        <div className="section-head"><div><span>STUDIO</span><h2>{file ? file.name : "Create your edit"}</h2></div><button className="secondary" onClick={downloadOriginal} disabled={!file}>⬇ Pobierz oryginał</button></div>
+        {!file ? <label className="dropzone">🎧<strong>Wrzuć plik audio</strong><span>MP3, WAV, OGG, M4A i inne</span><input type="file" accept="audio/*" onChange={chooseFile} hidden /></label> :
+        <div className="editor">
+          <audio ref={audio} src={url} onLoadedMetadata={e => setDuration(e.currentTarget.duration)} onTimeUpdate={e => setCurrent(e.currentTarget.currentTime)} onEnded={() => setPlaying(false)} />
+          <div className="player">
+            <button className="play" onClick={togglePlay}>{playing ? "❚❚" : "▶"}</button>
+            <div className="track"><div className="waveform">{Array.from({length:48},(_,i)=><i key={i} style={{height:`${16 + ((i*37)%55)}%`}} />)}</div><input type="range" min="0" max={duration || 1} step=".01" value={current} onChange={e => { const v=+e.target.value; setCurrent(v); if(audio.current) audio.current.currentTime=v; }} /><div className="times"><span>{fmt(current)}</span><span>{fmt(duration)}</span></div></div>
+            <select value={speed} onChange={e => setSpeed(+e.target.value)}><option value=".75">0.75×</option><option value=".82">0.82×</option><option value="1">1×</option><option value="1.1">1.1×</option><option value="1.2">1.2×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+          </div>
+          <div className="control-row"><label>🔊 Volume <input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setVolume(+e.target.value)}/><b>{Math.round(volume*100)}%</b></label><button className={saved?"secondary saved":"secondary"} onClick={()=>setSaved(!saved)}>{saved?"✓ Saved":"☆ Save project"}</button></div>
+          <div className="presets"><div className="subhead"><b>PRESETS</b><span>One click starting points</span></div><div className="preset-grid">{presets.map(p=><button key={p.name} onClick={()=>applyPreset(p)}><span>{p.emoji}</span>{p.name}</button>)}</div></div>
+          <div className="controls-grid">
+            {[
+              ["Bass",bass,setBass,-50,50],["Treble",treble,setTreble,-50,50],["Reverb",reverb,setReverb,0,100],["Echo / Delay",echo,setEcho,0,100],["Pitch",pitch,setPitch,-12,12],["Stereo Width",width,setWidth,0,100]
+            ].map(([name,value,setter,min,max])=><label className="control" key={name}><div><span>{name}</span><b>{String(value)}{name==="Pitch"?" st":""}</b></div><input type="range" min={String(min)} max={String(max)} value={String(value)} onChange={e=>(setter as (v:number)=>void)(+e.target.value)}/></label>)}
+          </div>
+          <div className="render-box"><div><b>Export</b><span>WAV export engine is next. Your original audio is ready above.</span></div><button className="primary" onClick={()=>alert("Render/export engine is queued for the next build.")}>Render edit →</button></div>
+        </div>}
+      </section>}
+
+      {tab === "edittok" && <section className="page">
+        <div className="section-head"><div><span>EDITTOK</span><h2>Discover edits</h2></div><div className="search">⌕ <input placeholder="Szukaj editów..." value={query} onChange={e=>setQuery(e.target.value)} /></div></div>
+        <div className="feed">{visibleDemos.map((d,i)=><article className="edit-card" key={d.title}><div className="cover"><div className="cover-orb">{["🌙","💜","🕶️","☁️"][i]}</div><span>♪</span></div><div className="edit-info"><div className="tag">{d.tag}</div><h3>{d.title}</h3><p>{d.user}</p><div className="card-actions"><button onClick={()=>setLiked(x=>x.includes(i)?x.filter(n=>n!==i):[...x,i])}>{liked.includes(i)?"❤️":"♡"} {d.likes+(liked.includes(i)?1:0)}</button><button>▶ {d.plays}</button><button>↗ Share</button><button>⬇ Download</button></div></div></article>)}</div>
+      </section>}
+
+      {tab === "profile" && <section className="page profile-page">
+        <div className="profile-hero"><div className="avatar">R</div><div><span>@RedzikFN</span><h2>RedzikFN</h2><p>Creator • Music edits • 🎧</p></div><button className="primary">Edit profile</button></div>
+        <div className="stats"><div><b>3</b><span>Editów</span></div><div><b>12.4K</b><span>Odtworzeń</span></div><div><b>486</b><span>Polubień</span></div><div><b>∞</b><span>Pomysłów</span></div></div>
+        <h2>Twoje edity</h2><div className="mini-grid">{demos.slice(0,3).map(d=><div className="mini-card" key={d.title}><div className="cover"><div className="cover-orb">♪</div></div><b>{d.title}</b><span>{d.tag}</span></div>)}</div>
+      </section>}
+
+      <footer>EDIT MUSIC <span>•</span> Create. Edit. Share.</footer>
+    </main>
+  );
+}
