@@ -48,7 +48,23 @@ export function buildGraph(ctx:AudioContext, source:MediaElementAudioSourceNode,
   splitter.connect(left,0); splitter.connect(right,1);
   left.connect(merger,0,0); right.connect(merger,0,1);
   merger.connect(limiter).connect(ctx.destination);
-  return {input, low, high, wet, echoGain, left, right, distortion, limiter};
+
+  const update = (next:Partial<AudioSettings>) => {
+    if (typeof next.volume==="number") input.gain.setTargetAtTime(next.volume,ctx.currentTime,.01);
+    if (typeof next.bass==="number") low.gain.setTargetAtTime(next.bass,ctx.currentTime,.01);
+    if (typeof next.treble==="number") high.gain.setTargetAtTime(next.treble,ctx.currentTime,.01);
+    if (typeof next.reverb==="number") wet.gain.setTargetAtTime(next.reverb/100*.7,ctx.currentTime,.01);
+    if (typeof next.echo==="number") echoGain.gain.setTargetAtTime(next.echo/100*.45,ctx.currentTime,.01);
+    if (typeof next.width==="number") {
+      const v=Math.min(1,Math.max(0,next.width/100));
+      left.gain.setTargetAtTime(1+v*.35,ctx.currentTime,.01);
+      right.gain.setTargetAtTime(1+v*.35,ctx.currentTime,.01);
+    }
+    if (typeof next.distortion==="number") distortion.curve=makeDistortionCurve(next.distortion);
+    if (typeof next.limiter==="number") limiter.threshold.setTargetAtTime(-2+(1-next.limiter/100)*10,ctx.currentTime,.01);
+  };
+
+  return {input, low, high, wet, echoGain, left, right, distortion, limiter, update};
 }
 
 export async function renderWav(file:File,s:AudioSettings) {
