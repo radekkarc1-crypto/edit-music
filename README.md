@@ -1,17 +1,5 @@
-# EDIT MUSIC
+{"name":"edit-music","version":"0.2.0","private":true,"scripts":{"dev":"next dev","build":"next build","start":"next start","lint":"next lint"},"dependencies":{"next":"latest","react":"latest","react-dom":"latest"},"devDependencies":{"@types/node":"latest","@types/react":"latest","@types/react-dom":"latest","typescript":"latest"}}
 
-Music editor + EditTok social platform.
+## Backend blueprint
 
-## Current build
-- Next.js App Router
-- responsive dark/red UI
-- audio upload + playback
-- playback speed and volume
-- editor controls and presets
-- local EditTok feed, search, likes
-- creator profile
-- original-file download
-- mobile-friendly layout
-
-## Next
-Real DSP rendering/export, persistent projects, Supabase Auth/Storage/Database, publishing, moderation, comments, follows and creator-controlled downloads.
+The repository now includes `supabase/schema.sql`, a ready database blueprint for profiles, tracks, edits, likes, comments, follows and copyright/moderation reports. It uses row-level security and creator-controlled downloads. The live Supabase project has not been created yet, so no paid resource was created automatically.
