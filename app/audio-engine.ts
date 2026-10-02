@@ -25,6 +25,15 @@ export function buildGraph(ctx:AudioContext, source:MediaElementAudioSourceNode,
   const delay=ctx.createDelay(2); delay.delayTime.value=.12;
   const echoGain=ctx.createGain(); echoGain.gain.value=s.echo/100*.45;
   const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-12; comp.knee.value=18; comp.ratio.value=3; comp.attack.value=.005; comp.release.value=.15;
+  const distortion=ctx.createWaveShaper();
+  distortion.curve=makeDistortionCurve(s.distortion);
+  distortion.oversample="4x";
+  const limiter=ctx.createDynamicsCompressor();
+  limiter.threshold.value=-2 + (1-s.limiter/100)*10;
+  limiter.knee.value=0;
+  limiter.ratio.value=20;
+  limiter.attack.value=.001;
+  limiter.release.value=.08;
   const merger=ctx.createChannelMerger(2);
   const splitter=ctx.createChannelSplitter(2);
   const left=ctx.createGain(), right=ctx.createGain();
@@ -38,9 +47,7 @@ export function buildGraph(ctx:AudioContext, source:MediaElementAudioSourceNode,
   comp.connect(splitter);
   splitter.connect(left,0); splitter.connect(right,1);
   left.connect(merger,0,0); right.connect(merger,0,1);
-  merger.connect(ctx.destination);
-  const distortion=ctx.createWaveShaper(); distortion.curve=makeDistortionCurve(s.distortion); distortion.oversample="4x";
-  const limiter=ctx.createDynamicsCompressor(); limiter.threshold.value=-2 + (1-s.limiter/100)*10; limiter.knee.value=0; limiter.ratio.value=20; limiter.attack.value=.001; limiter.release.value=.08;
+  merger.connect(limiter).connect(ctx.destination);
   return {input, low, high, wet, echoGain, left, right, distortion, limiter};
 }
 
@@ -69,10 +76,16 @@ export async function renderWav(file:File,s:AudioSettings) {
   const echoGain=offline.createGain(); echoGain.gain.value=s.echo/100*.45;
   const mix=offline.createGain();
   const fade=offline.createGain();
+  const distortion=offline.createWaveShaper();
+  distortion.curve=makeDistortionCurve(s.distortion);
+  distortion.oversample="4x";
+  const limiter=offline.createDynamicsCompressor();
+  limiter.threshold.value=-2 + (1-s.limiter/100)*10;
+  limiter.knee.value=0; limiter.ratio.value=20; limiter.attack.value=.001; limiter.release.value=.08;
   input.connect(low).connect(high);
   high.connect(distortion);
   distortion.connect(dry); distortion.connect(convolver).connect(wet); distortion.connect(delay).connect(echoGain);
-  dry.connect(mix); wet.connect(mix); echoGain.connect(mix); mix.connect(comp).connect(fade).connect(offline.destination);
+  dry.connect(mix); wet.connect(mix); echoGain.connect(mix); mix.connect(comp).connect(fade).connect(limiter).connect(offline.destination);
   for(let i=0;i<repeats;i++){const src=offline.createBufferSource();
     if(s.reverse){
       const rev=offline.createBuffer(decoded.numberOfChannels,decoded.length,decoded.sampleRate);
