@@ -47,6 +47,7 @@ export default function Home() {
   const [width, setWidth] = useState(0);
   const [query, setQuery] = useState("");
   const [liked, setLiked] = useState<number[]>([]);
+  const [feedMode,setFeedMode]=useState<"all"|"new"|"popular">("all");
   const [saved, setSaved] = useState(false);
   const audioCtx = useRef<AudioContext | null>(null);
   const sourceNode = useRef<MediaElementAudioSourceNode | null>(null);
@@ -96,7 +97,12 @@ export default function Home() {
   useEffect(()=>{try{const p=JSON.parse(localStorage.getItem("edit-music-posts")||"[]");if(Array.isArray(p))setPublished(p)}catch{}},[]);
   useEffect(()=>{localStorage.setItem("edit-music-posts",JSON.stringify(published.map(({localUrl,...rest})=>rest)))},[published]);
   const allPosts=[...published,...demos];
-  const visibleDemos = useMemo(() => allPosts.filter(d => `${d.title} ${d.user} ${d.tag}`.toLowerCase().includes(query.toLowerCase())), [query]);
+  const visibleDemos = useMemo(() => {
+    const filtered=allPosts.filter(d => `${d.title} ${d.user} ${d.tag}`.toLowerCase().includes(query.toLowerCase()));
+    if(feedMode==="new") return filtered;
+    if(feedMode==="popular") return [...filtered].sort((a,b)=>b.likes-a.likes);
+    return filtered;
+  }, [query,published,feedMode]);
 
   const chooseFile = (e: ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files?.[0];
@@ -203,7 +209,7 @@ export default function Home() {
 
       {tab === "edittok" && <section className="page">
         <div className="section-head"><div><span>EDITTOK</span><h2>Discover edits</h2></div><div className="search">⌕ <input placeholder="Szukaj editów..." value={query} onChange={e=>setQuery(e.target.value)} /></div></div>
-        <div className="feed">{visibleDemos.map((d,i)=><article className="edit-card" key={d.title+"-"+i}><div className="cover"><div className="cover-orb">{["🌙","💜","🕶️","☁️"][i%4]}</div><span>♪</span></div><div className="edit-info"><div className="tag">{d.tag}</div><h3>{d.title}</h3><p>{d.user}</p><div className="card-actions"><button onClick={()=>setLiked(x=>x.includes(i)?x.filter(n=>n!==i):[...x,i])}>{liked.includes(i)?"❤️":"♡"} {d.likes+(liked.includes(i)?1:0)}</button><button>▶ {d.plays}</button><button onClick={()=>setCommentOpen(commentOpen===i?null:i)}>💬 {comments[i]?.length||0}</button><button disabled={d.allowDownload===false} onClick={()=>{if(d.localUrl){const a=document.createElement("a");a.href=d.localUrl;a.download=d.title+".audio";a.click()}}}>⬇ {d.allowDownload===false?"Locked":"Download"}</button></div>{commentOpen===i&&<div className="comments"><div>{(comments[i]||[]).map((c,n)=><p key={n}>💬 {c}</p>)}</div><div className="comment-input"><input value={commentText} onChange={e=>setCommentText(e.target.value)} placeholder="Napisz komentarz..."/><button onClick={()=>{if(!commentText.trim())return;setComments(x=>({...x,[i]:[...(x[i]||[]),commentText.trim()]}));setCommentText("")}}>Wyślij</button></div></div>}</div></article>)}</div>
+        <div className="feed-tabs"><button className={feedMode==="all"?"active":""} onClick={()=>setFeedMode("all")}>✨ Dla Ciebie</button><button className={feedMode==="new"?"active":""} onClick={()=>setFeedMode("new")}>🆕 Nowe</button><button className={feedMode==="popular"?"active":""} onClick={()=>setFeedMode("popular")}>🔥 Popularne</button></div><div className="feed">{visibleDemos.map((d,i)=><article className="edit-card" key={d.title+"-"+i}><div className="cover"><div className="cover-orb">{["🌙","💜","🕶️","☁️"][i%4]}</div><span>♪</span></div><div className="edit-info"><div className="tag">{d.tag}</div><h3>{d.title}</h3><p>{d.user}</p><div className="card-actions"><button onClick={()=>setLiked(x=>x.includes(i)?x.filter(n=>n!==i):[...x,i])}>{liked.includes(i)?"❤️":"♡"} {d.likes+(liked.includes(i)?1:0)}</button><button>▶ {d.plays}</button><button onClick={()=>setCommentOpen(commentOpen===i?null:i)}>💬 {comments[i]?.length||0}</button><button disabled={d.allowDownload===false} onClick={()=>{if(d.localUrl){const a=document.createElement("a");a.href=d.localUrl;a.download=d.title+".audio";a.click()}}}>⬇ {d.allowDownload===false?"Locked":"Download"}</button></div>{commentOpen===i&&<div className="comments"><div>{(comments[i]||[]).map((c,n)=><p key={n}>💬 {c}</p>)}</div><div className="comment-input"><input value={commentText} onChange={e=>setCommentText(e.target.value)} placeholder="Napisz komentarz..."/><button onClick={()=>{if(!commentText.trim())return;setComments(x=>({...x,[i]:[...(x[i]||[]),commentText.trim()]}));setCommentText("")}}>Wyślij</button></div></div>}</div></article>)}</div>
       </section>}
 
       {tab === "profile" && <section className="page profile-page">
