@@ -143,6 +143,18 @@ export default function Home() {
     } finally { setRendering(false); }
   };
 
+  const togglePostPlay = async (index:number, post:{localUrl?:string}) => {
+    if (!post.localUrl) return;
+    const player=document.getElementById("edittok-audio-"+index) as HTMLAudioElement|null;
+    if (!player) return;
+    if (playingPost===index) { player.pause(); setPlayingPost(null); }
+    else {
+      document.querySelectorAll<HTMLAudioElement>(".edittok-audio").forEach(x=>x.pause());
+      await player.play();
+      setPlayingPost(index);
+    }
+  };
+
   const downloadOriginal = () => {
     if (!url || !file) return;
     const link = document.createElement("a");
@@ -209,7 +221,7 @@ export default function Home() {
 
       {tab === "edittok" && <section className="page">
         <div className="section-head"><div><span>EDITTOK</span><h2>Discover edits</h2></div><div className="search">⌕ <input placeholder="Szukaj editów..." value={query} onChange={e=>setQuery(e.target.value)} /></div></div>
-        <div className="feed-tabs"><button className={feedMode==="all"?"active":""} onClick={()=>setFeedMode("all")}>✨ Dla Ciebie</button><button className={feedMode==="new"?"active":""} onClick={()=>setFeedMode("new")}>🆕 Nowe</button><button className={feedMode==="popular"?"active":""} onClick={()=>setFeedMode("popular")}>🔥 Popularne</button></div><div className="feed">{visibleDemos.map((d,i)=><article className="edit-card" key={d.title+"-"+i}><div className="cover"><div className="cover-orb">{["🌙","💜","🕶️","☁️"][i%4]}</div><span>♪</span></div><div className="edit-info"><div className="tag">{d.tag}</div><h3>{d.title}</h3><p>{d.user}</p><div className="card-actions"><button onClick={()=>setLiked(x=>x.includes(i)?x.filter(n=>n!==i):[...x,i])}>{liked.includes(i)?"❤️":"♡"} {d.likes+(liked.includes(i)?1:0)}</button><button>▶ {d.plays}</button><button onClick={()=>setCommentOpen(commentOpen===i?null:i)}>💬 {comments[i]?.length||0}</button><button disabled={d.allowDownload===false} onClick={()=>{if(d.localUrl){const a=document.createElement("a");a.href=d.localUrl;a.download=d.title+".audio";a.click()}}}>⬇ {d.allowDownload===false?"Locked":"Download"}</button></div>{commentOpen===i&&<div className="comments"><div>{(comments[i]||[]).map((c,n)=><p key={n}>💬 {c}</p>)}</div><div className="comment-input"><input value={commentText} onChange={e=>setCommentText(e.target.value)} placeholder="Napisz komentarz..."/><button onClick={()=>{if(!commentText.trim())return;setComments(x=>({...x,[i]:[...(x[i]||[]),commentText.trim()]}));setCommentText("")}}>Wyślij</button></div></div>}</div></article>)}</div>
+        <div className="feed-tabs"><button className={feedMode==="all"?"active":""} onClick={()=>setFeedMode("all")}>✨ Dla Ciebie</button><button className={feedMode==="new"?"active":""} onClick={()=>setFeedMode("new")}>🆕 Nowe</button><button className={feedMode==="popular"?"active":""} onClick={()=>setFeedMode("popular")}>🔥 Popularne</button></div><div className="feed">{visibleDemos.map((d,i)=><article className="edit-card" key={d.title+"-"+i}><div className="cover"><div className="cover-orb">{["🌙","💜","🕶️","☁️"][i%4]}</div><span>♪</span></div><div className="edit-info">{d.localUrl&&<audio id={"edittok-audio-"+i} className="edittok-audio" src={d.localUrl} onEnded={()=>setPlayingPost(null)} preload="metadata" /> }<div className="tag">{d.tag}</div><h3>{d.title}</h3><p>{d.user}</p><div className="card-actions"><button onClick={()=>setLiked(x=>x.includes(i)?x.filter(n=>n!==i):[...x,i])}>{liked.includes(i)?"❤️":"♡"} {d.likes+(liked.includes(i)?1:0)}</button><button onClick={()=>togglePostPlay(i,d)}>{playingPost===i?"❚❚":"▶"} {d.plays}</button><button onClick={()=>setCommentOpen(commentOpen===i?null:i)}>💬 {comments[i]?.length||0}</button><button disabled={d.allowDownload===false} onClick={()=>{if(d.localUrl){const a=document.createElement("a");a.href=d.localUrl;a.download=d.title+".audio";a.click()}}}>⬇ {d.allowDownload===false?"Locked":"Download"}</button></div>{commentOpen===i&&<div className="comments"><div>{(comments[i]||[]).map((c,n)=><p key={n}>💬 {c}</p>)}</div><div className="comment-input"><input value={commentText} onChange={e=>setCommentText(e.target.value)} placeholder="Napisz komentarz..."/><button onClick={()=>{if(!commentText.trim())return;setComments(x=>({...x,[i]:[...(x[i]||[]),commentText.trim()]}));setCommentText("")}}>Wyślij</button></div></div>}</div></article>)}</div>
       </section>}
 
       {tab === "profile" && <section className="page profile-page">
