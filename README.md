@@ -1,3 +1,3 @@
 # EDIT MUSIC
 
-Music editor + EditTok. 🚀
+Next.js music editor + EditTok.
