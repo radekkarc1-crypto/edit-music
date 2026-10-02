@@ -54,6 +54,15 @@ export default function Home() {
   const [rendering, setRendering] = useState(false);
   const [trimStart,setTrimStart]=useState(0), [trimEnd,setTrimEnd]=useState(0), [fadeIn,setFadeIn]=useState(0), [fadeOut,setFadeOut]=useState(0), [loopCount,setLoopCount]=useState(1);
   const [projectName,setProjectName]=useState("My Edit"), [autoSaved,setAutoSaved]=useState(false);
+  const [distortion,setDistortion]=useState(0);
+  const [limiter,setLimiter]=useState(70);
+  const [reverse,setReverse]=useState(false);
+  const [exportFormat,setExportFormat]=useState("wav");
+  const [accountOpen,setAccountOpen]=useState(false);
+  const [accountMode,setAccountMode]=useState<"login"|"register">("login");
+  const [accountEmail,setAccountEmail]=useState("");
+  const [accountPassword,setAccountPassword]=useState("");
+  const [accountMessage,setAccountMessage]=useState("");
   const settings: AudioSettings={speed,volume,bass,treble,reverb,echo,pitch,width,trimStart,trimEnd:trimEnd||duration,fadeIn,fadeOut,loopCount,distortion,limiter,reverse};
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -82,7 +91,7 @@ export default function Home() {
     graphInput.current?.gain.setTargetAtTime(volume, audioCtx.current.currentTime, .01);
   }, [volume]);
 
-  useEffect(()=>{try{const p=JSON.parse(localStorage.getItem("edit-music-project")||"{}"); if(p.projectName)setProjectName(p.projectName); if(typeof p.speed==="number")setSpeed(p.speed); if(typeof p.volume==="number")setVolume(p.volume); if(typeof p.bass==="number")setBass(p.bass); if(typeof p.treble==="number")setTreble(p.treble); if(typeof p.reverb==="number")setReverb(p.reverb); if(typeof p.echo==="number")setEcho(p.echo); if(typeof p.pitch==="number")setPitch(p.pitch); if(typeof p.width==="number")setWidth(p.width); if(typeof p.fadeIn==="number")setFadeIn(p.fadeIn); if(typeof p.fadeOut==="number")setFadeOut(p.fadeOut); if(typeof p.loopCount==="number")setLoopCount(p.loopCount);}catch{}},[]);
+  useEffect(()=>{try{const p=JSON.parse(localStorage.getItem("edit-music-project")||"{}"); if(p.projectName)setProjectName(p.projectName); if(typeof p.speed==="number")setSpeed(p.speed); if(typeof p.volume==="number")setVolume(p.volume); if(typeof p.bass==="number")setBass(p.bass); if(typeof p.treble==="number")setTreble(p.treble); if(typeof p.reverb==="number")setReverb(p.reverb); if(typeof p.echo==="number")setEcho(p.echo); if(typeof p.pitch==="number")setPitch(p.pitch); if(typeof p.width==="number")setWidth(p.width); if(typeof p.fadeIn==="number")setFadeIn(p.fadeIn); if(typeof p.fadeOut==="number")setFadeOut(p.fadeOut); if(typeof p.loopCount==="number")setLoopCount(p.loopCount); if(typeof p.distortion==="number")setDistortion(p.distortion); if(typeof p.limiter==="number")setLimiter(p.limiter); if(typeof p.reverse==="boolean")setReverse(p.reverse);}catch{}},[]);
   useEffect(()=>{localStorage.setItem("edit-music-project",JSON.stringify({projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount,distortion,limiter,reverse}));setAutoSaved(true);const t=setTimeout(()=>setAutoSaved(false),700);return()=>clearTimeout(t)},[projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount,distortion,limiter,reverse]);
   const visibleDemos = useMemo(() => demos.filter(d => `${d.title} ${d.user} ${d.tag}`.toLowerCase().includes(query.toLowerCase())), [query]);
 
@@ -137,8 +146,10 @@ export default function Home() {
           <button key={t} className={tab === t ? "nav active" : "nav"} onClick={() => setTab(t)}>
             {t === "home" ? "Home" : t === "studio" ? "Studio" : t === "edittok" ? "EditTok" : "Profil"}
           </button>)}</nav>
-        <label className="upload-btn">＋ Upload<input type="file" accept="audio/*" onChange={chooseFile} hidden /></label>
+        <button className="account-btn" onClick={()=>{setAccountOpen(true);setAccountMessage("")}}>👤 Konto</button><label className="upload-btn">＋ Upload<input type="file" accept="audio/*" onChange={chooseFile} hidden /></label>
       </header>
+
+      {accountOpen && <div className="modal-backdrop" onClick={()=>setAccountOpen(false)}><div className="account-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setAccountOpen(false)}>×</button><span className="pill">EDIT MUSIC ACCOUNT</span><h2>{accountMode==="login"?"Zaloguj się":"Utwórz konto"}</h2><p className="muted">Konto online podłączymy do Supabase. Na razie formularz jest gotowy, ale nie wysyła danych nigdzie.</p><input placeholder="E-mail" type="email" value={accountEmail} onChange={e=>setAccountEmail(e.target.value)}/><input placeholder="Hasło" type="password" value={accountPassword} onChange={e=>setAccountPassword(e.target.value)}/><button className="primary full" onClick={()=>setAccountMessage("Backend nie jest jeszcze podłączony. Twoje dane nie zostały wysłane.")}>{accountMode==="login"?"Zaloguj":"Zarejestruj"}</button>{accountMessage&&<div className="account-message">{accountMessage}</div>}<button className="switch-auth" onClick={()=>setAccountMode(accountMode==="login"?"register":"login")}>{accountMode==="login"?"Nie masz konta? Zarejestruj się":"Masz już konto? Zaloguj się"}</button></div></div>}
 
       {tab === "home" && <section className="page">
         <div className="hero">
