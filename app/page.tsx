@@ -52,7 +52,9 @@ export default function Home() {
   const sourceNode = useRef<MediaElementAudioSourceNode | null>(null);
   const graphInput = useRef<GainNode | null>(null);
   const [rendering, setRendering] = useState(false);
-  const settings: AudioSettings = { speed, volume, bass, treble, reverb, echo, pitch, width };
+  const [trimStart,setTrimStart]=useState(0), [trimEnd,setTrimEnd]=useState(0), [fadeIn,setFadeIn]=useState(0), [fadeOut,setFadeOut]=useState(0), [loopCount,setLoopCount]=useState(1);
+  const [projectName,setProjectName]=useState("My Edit"), [autoSaved,setAutoSaved]=useState(false);
+  const settings: AudioSettings={speed,volume,bass,treble,reverb,echo,pitch,width,trimStart,trimEnd:trimEnd||duration,fadeIn,fadeOut,loopCount};
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
@@ -80,6 +82,8 @@ export default function Home() {
     graphInput.current?.gain.setTargetAtTime(volume, audioCtx.current.currentTime, .01);
   }, [volume]);
 
+  useEffect(()=>{try{const p=JSON.parse(localStorage.getItem("edit-music-project")||"{}"); if(p.projectName)setProjectName(p.projectName); if(typeof p.speed==="number")setSpeed(p.speed); if(typeof p.volume==="number")setVolume(p.volume); if(typeof p.bass==="number")setBass(p.bass); if(typeof p.treble==="number")setTreble(p.treble); if(typeof p.reverb==="number")setReverb(p.reverb); if(typeof p.echo==="number")setEcho(p.echo); if(typeof p.pitch==="number")setPitch(p.pitch); if(typeof p.width==="number")setWidth(p.width); if(typeof p.fadeIn==="number")setFadeIn(p.fadeIn); if(typeof p.fadeOut==="number")setFadeOut(p.fadeOut); if(typeof p.loopCount==="number")setLoopCount(p.loopCount);}catch{}},[]);
+  useEffect(()=>{localStorage.setItem("edit-music-project",JSON.stringify({projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount}));setAutoSaved(true);const t=setTimeout(()=>setAutoSaved(false),700);return()=>clearTimeout(t)},[projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount]);
   const visibleDemos = useMemo(() => demos.filter(d => `${d.title} ${d.user} ${d.tag}`.toLowerCase().includes(query.toLowerCase())), [query]);
 
   const chooseFile = (e: ChangeEvent<HTMLInputElement>) => {
@@ -170,9 +174,9 @@ export default function Home() {
             <div className="track"><div className="waveform">{Array.from({length:48},(_,i)=><i key={i} style={{height:`${16 + ((i*37)%55)}%`}} />)}</div><input type="range" min="0" max={duration || 1} step=".01" value={current} onChange={e => { const v=+e.target.value; setCurrent(v); if(audio.current) audio.current.currentTime=v; }} /><div className="times"><span>{fmt(current)}</span><span>{fmt(duration)}</span></div></div>
             <select value={speed} onChange={e => setSpeed(+e.target.value)}><option value=".75">0.75×</option><option value=".82">0.82×</option><option value="1">1×</option><option value="1.1">1.1×</option><option value="1.2">1.2×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
           </div>
-          <div className="control-row"><label>🔊 Volume <input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setVolume(+e.target.value)}/><b>{Math.round(volume*100)}%</b></label><button className={saved?"secondary saved":"secondary"} onClick={()=>setSaved(!saved)}>{saved?"✓ Saved":"☆ Save project"}</button></div>
+          <div className="control-row"><label>📝 Projekt <input value={projectName} onChange={e=>setProjectName(e.target.value)} placeholder="Nazwa projektu"/></label><span className="autosave">{autoSaved?"✓ Auto-saved":"Saved locally"}</span><label>🔊 Volume <input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setVolume(+e.target.value)}/><b>{Math.round(volume*100)}%</b></label><button className={saved?"secondary saved":"secondary"} onClick={()=>setSaved(!saved)}>{saved?"✓ Saved":"☆ Save project"}</button></div>
           <div className="presets"><div className="subhead"><b>PRESETS</b><span>One click starting points</span></div><div className="preset-grid">{presets.map(p=><button key={p.name} onClick={()=>applyPreset(p)}><span>{p.emoji}</span>{p.name}</button>)}</div></div>
-          <div className="controls-grid">
+          <div className="timeline-tools"><div><b>✂️ Trim</b><span>{fmt(trimStart)} → {fmt(trimEnd||duration)}</span></div><label>Start<input type="range" min="0" max={Math.max(duration,.01)} step=".01" value={trimStart} onChange={e=>setTrimStart(Math.min(+e.target.value,Math.max(0,(trimEnd||duration)-.05)))}/></label><label>Koniec<input type="range" min="0" max={Math.max(duration,.01)} step=".01" value={trimEnd||duration} onChange={e=>setTrimEnd(Math.max(trimStart+.05,+e.target.value))}/></label><div className="fade-grid"><label>Fade in<input type="range" min="0" max="10" step=".1" value={fadeIn} onChange={e=>setFadeIn(+e.target.value)}/><b>{fadeIn.toFixed(1)}s</b></label><label>Fade out<input type="range" min="0" max="10" step=".1" value={fadeOut} onChange={e=>setFadeOut(+e.target.value)}/><b>{fadeOut.toFixed(1)}s</b></label></div><label>🔁 Loop<select value={loopCount} onChange={e=>setLoopCount(+e.target.value)}><option value="1">1×</option><option value="2">2×</option><option value="3">3×</option><option value="4">4×</option><option value="8">8×</option></select></label></div><div className="controls-grid">
             {[
               ["Bass",bass,setBass,-50,50],["Treble",treble,setTreble,-50,50],["Reverb",reverb,setReverb,0,100],["Echo / Delay",echo,setEcho,0,100],["Pitch",pitch,setPitch,-12,12],["Stereo Width",width,setWidth,0,100]
             ].map(([name,value,setter,min,max])=><label className="control" key={name}><div><span>{name}</span><b>{String(value)}{name==="Pitch"?" st":""}</b></div><input type="range" min={String(min)} max={String(max)} value={String(value)} onChange={e=>(setter as (v:number)=>void)(+e.target.value)}/></label>)}

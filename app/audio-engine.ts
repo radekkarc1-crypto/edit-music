@@ -1,5 +1,5 @@
 export type AudioSettings = {
-  speed:number; volume:number; bass:number; treble:number; reverb:number; echo:number; pitch:number; width:number;
+  speed:number; volume:number; bass:number; treble:number; reverb:number; echo:number; pitch:number; width:number; trimStart:number; trimEnd:number; fadeIn:number; fadeOut:number; loopCount:number;
 };
 
 export function makeImpulse(ctx:BaseAudioContext, seconds:number, decay:number) {
@@ -33,7 +33,7 @@ export function buildGraph(ctx:AudioContext, source:MediaElementAudioSourceNode,
   splitter.connect(left,0); splitter.connect(right,1);
   left.connect(merger,0,0); right.connect(merger,0,1);
   merger.connect(ctx.destination);
-  return {input};
+  return {input, low, high, wet, echoGain, left, right};
 }
 
 export async function renderWav(file:File,s:AudioSettings) {
@@ -41,10 +41,15 @@ export async function renderWav(file:File,s:AudioSettings) {
   const probe=new AudioContext();
   const decoded=await probe.decodeAudioData(data.slice(0));
   await probe.close();
+  const start=Math.max(0,Math.min(decoded.duration,s.trimStart));
+  const end=Math.max(start+.01,Math.min(decoded.duration,s.trimEnd||decoded.duration));
+  const segment=end-start;
   const rate=Math.max(.25,Math.min(3,s.speed*Math.pow(2,s.pitch/12)));
-  const outLength=Math.ceil(decoded.duration/rate*decoded.sampleRate)+decoded.sampleRate*3;
+  const repeats=Math.max(1,Math.floor(s.loopCount||1));
+  const effectiveSegment=segment/rate;
+  const total=effectiveSegment*repeats;
+  const outLength=Math.ceil((total+Math.max(0,s.fadeOut)+2.6)*decoded.sampleRate);
   const offline=new OfflineAudioContext(2,outLength,decoded.sampleRate);
-  const src=offline.createBufferSource(); src.buffer=decoded; src.playbackRate.value=rate;
   const input=offline.createGain(); input.gain.value=s.volume;
   const low=offline.createBiquadFilter(); low.type="lowshelf"; low.frequency.value=180; low.gain.value=s.bass;
   const high=offline.createBiquadFilter(); high.type="highshelf"; high.frequency.value=4200; high.gain.value=s.treble;
@@ -54,13 +59,16 @@ export async function renderWav(file:File,s:AudioSettings) {
   const convolver=offline.createConvolver(); convolver.buffer=makeImpulse(offline,2.4,2.8);
   const delay=offline.createDelay(2); delay.delayTime.value=.12;
   const echoGain=offline.createGain(); echoGain.gain.value=s.echo/100*.45;
-  const sum=offline.createGain();
-  src.connect(input).connect(low).connect(high);
+  const mix=offline.createGain();
+  const fade=offline.createGain();
+  input.connect(low).connect(high);
   high.connect(dry); high.connect(convolver).connect(wet); high.connect(delay).connect(echoGain);
-  dry.connect(sum); wet.connect(sum); echoGain.connect(sum); sum.connect(comp).connect(offline.destination);
-  src.start(0);
-  const rendered=await offline.startRendering();
-  return audioBufferToWav(rendered);
+  dry.connect(mix); wet.connect(mix); echoGain.connect(mix); mix.connect(comp).connect(fade).connect(offline.destination);
+  for(let i=0;i<repeats;i++){const src=offline.createBufferSource();src.buffer=decoded;src.playbackRate.value=rate;src.connect(input);src.start(i*effectiveSegment,start,segment);}
+  const fi=Math.min(Math.max(0,s.fadeIn),total/2), fo=Math.min(Math.max(0,s.fadeOut),total/2);
+  fade.gain.setValueAtTime(0,0); fade.gain.linearRampToValueAtTime(1,fi);
+  fade.gain.setValueAtTime(1,Math.max(fi,total-fo)); fade.gain.linearRampToValueAtTime(0,total);
+  return audioBufferToWav(await offline.startRendering());
 }
 
 function audioBufferToWav(buffer:AudioBuffer) {
