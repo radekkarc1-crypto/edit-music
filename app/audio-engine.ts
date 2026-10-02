@@ -1,6 +1,12 @@
 export type AudioSettings = {
-  speed:number; volume:number; bass:number; treble:number; reverb:number; echo:number; pitch:number; width:number; trimStart:number; trimEnd:number; fadeIn:number; fadeOut:number; loopCount:number;
+  speed:number; volume:number; bass:number; treble:number; reverb:number; echo:number; pitch:number; width:number; trimStart:number; trimEnd:number; fadeIn:number; fadeOut:number; loopCount:number; distortion:number; limiter:number; reverse:boolean;
 };
+
+function makeDistortionCurve(amount:number) {
+  const n=44100, curve=new Float32Array(n), k=Math.max(0,amount)*4;
+  for(let i=0;i<n;i++){const x=i*2/n-1; curve[i]=k?((3+k)*x*20*Math.PI/180)/(Math.PI+k*Math.abs(x)):x;}
+  return curve;
+}
 
 export function makeImpulse(ctx:BaseAudioContext, seconds:number, decay:number) {
   const length=Math.max(1,Math.floor(ctx.sampleRate*seconds));
@@ -25,16 +31,16 @@ export function buildGraph(ctx:AudioContext, source:MediaElementAudioSourceNode,
   const side=Math.min(1,s.width/100);
   left.gain.value=1+side*.35; right.gain.value=1+side*.35;
   source.connect(input).connect(low).connect(high);
-  high.connect(dry);
-  high.connect(convolver).connect(wet);
-  high.connect(delay).connect(echoGain);
+  high.connect(distortion).connect(dry);
+  distortion.connect(convolver).connect(wet);
+  distortion.connect(delay).connect(echoGain);
   dry.connect(comp); wet.connect(comp); echoGain.connect(comp);
   comp.connect(splitter);
   splitter.connect(left,0); splitter.connect(right,1);
   left.connect(merger,0,0); right.connect(merger,0,1);
   merger.connect(ctx.destination);
-  const distortion=ctx.createWaveShaper(); distortion.curve=null; distortion.oversample="4x";
-  const limiter=ctx.createDynamicsCompressor(); limiter.threshold.value=-2; limiter.knee.value=0; limiter.ratio.value=20; limiter.attack.value=.001; limiter.release.value=.08;
+  const distortion=ctx.createWaveShaper(); distortion.curve=makeDistortionCurve(s.distortion); distortion.oversample="4x";
+  const limiter=ctx.createDynamicsCompressor(); limiter.threshold.value=-2 + (1-s.limiter/100)*10; limiter.knee.value=0; limiter.ratio.value=20; limiter.attack.value=.001; limiter.release.value=.08;
   return {input, low, high, wet, echoGain, left, right, distortion, limiter};
 }
 
@@ -64,9 +70,16 @@ export async function renderWav(file:File,s:AudioSettings) {
   const mix=offline.createGain();
   const fade=offline.createGain();
   input.connect(low).connect(high);
-  high.connect(dry); high.connect(convolver).connect(wet); high.connect(delay).connect(echoGain);
+  high.connect(distortion);
+  distortion.connect(dry); distortion.connect(convolver).connect(wet); distortion.connect(delay).connect(echoGain);
   dry.connect(mix); wet.connect(mix); echoGain.connect(mix); mix.connect(comp).connect(fade).connect(offline.destination);
-  for(let i=0;i<repeats;i++){const src=offline.createBufferSource();src.buffer=decoded;src.playbackRate.value=rate;src.connect(input);src.start(i*effectiveSegment,start,segment);}
+  for(let i=0;i<repeats;i++){const src=offline.createBufferSource();
+    if(s.reverse){
+      const rev=offline.createBuffer(decoded.numberOfChannels,decoded.length,decoded.sampleRate);
+      for(let c=0;c<decoded.numberOfChannels;c++){const from=decoded.getChannelData(c),to=rev.getChannelData(c);for(let j=0;j<decoded.length;j++)to[j]=from[decoded.length-1-j];}
+      src.buffer=rev;
+    } else src.buffer=decoded;
+    src.playbackRate.value=rate;src.connect(input);src.start(i*effectiveSegment,s.reverse?decoded.duration-end:start,segment);}
   const fi=Math.min(Math.max(0,s.fadeIn),total/2), fo=Math.min(Math.max(0,s.fadeOut),total/2);
   fade.gain.setValueAtTime(0,0); fade.gain.linearRampToValueAtTime(1,fi);
   fade.gain.setValueAtTime(1,Math.max(fi,total-fo)); fade.gain.linearRampToValueAtTime(0,total);
