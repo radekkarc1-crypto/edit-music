@@ -54,7 +54,7 @@ export default function Home() {
   const [rendering, setRendering] = useState(false);
   const [trimStart,setTrimStart]=useState(0), [trimEnd,setTrimEnd]=useState(0), [fadeIn,setFadeIn]=useState(0), [fadeOut,setFadeOut]=useState(0), [loopCount,setLoopCount]=useState(1);
   const [projectName,setProjectName]=useState("My Edit"), [autoSaved,setAutoSaved]=useState(false);
-  const settings: AudioSettings={speed,volume,bass,treble,reverb,echo,pitch,width,trimStart,trimEnd:trimEnd||duration,fadeIn,fadeOut,loopCount};
+  const settings: AudioSettings={speed,volume,bass,treble,reverb,echo,pitch,width,trimStart,trimEnd:trimEnd||duration,fadeIn,fadeOut,loopCount,distortion,limiter,reverse};
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
@@ -83,7 +83,7 @@ export default function Home() {
   }, [volume]);
 
   useEffect(()=>{try{const p=JSON.parse(localStorage.getItem("edit-music-project")||"{}"); if(p.projectName)setProjectName(p.projectName); if(typeof p.speed==="number")setSpeed(p.speed); if(typeof p.volume==="number")setVolume(p.volume); if(typeof p.bass==="number")setBass(p.bass); if(typeof p.treble==="number")setTreble(p.treble); if(typeof p.reverb==="number")setReverb(p.reverb); if(typeof p.echo==="number")setEcho(p.echo); if(typeof p.pitch==="number")setPitch(p.pitch); if(typeof p.width==="number")setWidth(p.width); if(typeof p.fadeIn==="number")setFadeIn(p.fadeIn); if(typeof p.fadeOut==="number")setFadeOut(p.fadeOut); if(typeof p.loopCount==="number")setLoopCount(p.loopCount);}catch{}},[]);
-  useEffect(()=>{localStorage.setItem("edit-music-project",JSON.stringify({projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount}));setAutoSaved(true);const t=setTimeout(()=>setAutoSaved(false),700);return()=>clearTimeout(t)},[projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount]);
+  useEffect(()=>{localStorage.setItem("edit-music-project",JSON.stringify({projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount,distortion,limiter,reverse}));setAutoSaved(true);const t=setTimeout(()=>setAutoSaved(false),700);return()=>clearTimeout(t)},[projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount,distortion,limiter,reverse]);
   const visibleDemos = useMemo(() => demos.filter(d => `${d.title} ${d.user} ${d.tag}`.toLowerCase().includes(query.toLowerCase())), [query]);
 
   const chooseFile = (e: ChangeEvent<HTMLInputElement>) => {
@@ -178,10 +178,10 @@ export default function Home() {
           <div className="presets"><div className="subhead"><b>PRESETS</b><span>One click starting points</span></div><div className="preset-grid">{presets.map(p=><button key={p.name} onClick={()=>applyPreset(p)}><span>{p.emoji}</span>{p.name}</button>)}</div></div>
           <div className="timeline-tools"><div><b>✂️ Trim</b><span>{fmt(trimStart)} → {fmt(trimEnd||duration)}</span></div><label>Start<input type="range" min="0" max={Math.max(duration,.01)} step=".01" value={trimStart} onChange={e=>setTrimStart(Math.min(+e.target.value,Math.max(0,(trimEnd||duration)-.05)))}/></label><label>Koniec<input type="range" min="0" max={Math.max(duration,.01)} step=".01" value={trimEnd||duration} onChange={e=>setTrimEnd(Math.max(trimStart+.05,+e.target.value))}/></label><div className="fade-grid"><label>Fade in<input type="range" min="0" max="10" step=".1" value={fadeIn} onChange={e=>setFadeIn(+e.target.value)}/><b>{fadeIn.toFixed(1)}s</b></label><label>Fade out<input type="range" min="0" max="10" step=".1" value={fadeOut} onChange={e=>setFadeOut(+e.target.value)}/><b>{fadeOut.toFixed(1)}s</b></label></div><label>🔁 Loop<select value={loopCount} onChange={e=>setLoopCount(+e.target.value)}><option value="1">1×</option><option value="2">2×</option><option value="3">3×</option><option value="4">4×</option><option value="8">8×</option></select></label></div><div className="controls-grid">
             {[
-              ["Bass",bass,setBass,-50,50],["Treble",treble,setTreble,-50,50],["Reverb",reverb,setReverb,0,100],["Echo / Delay",echo,setEcho,0,100],["Pitch",pitch,setPitch,-12,12],["Stereo Width",width,setWidth,0,100]
+              ["Bass",bass,setBass,-50,50],["Treble",treble,setTreble,-50,50],["Reverb",reverb,setReverb,0,100],["Echo / Delay",echo,setEcho,0,100],["Pitch",pitch,setPitch,-12,12],["Stereo Width",width,setWidth,0,100],["Distortion",distortion,setDistortion,0,100],["Limiter",limiter,setLimiter,0,100]
             ].map(([name,value,setter,min,max])=><label className="control" key={name}><div><span>{name}</span><b>{String(value)}{name==="Pitch"?" st":""}</b></div><input type="range" min={String(min)} max={String(max)} value={String(value)} onChange={e=>(setter as (v:number)=>void)(+e.target.value)}/></label>)}
           </div>
-          <div className="render-box"><div><b>Export WAV</b><span>Efekty są renderowane do prawdziwego pliku WAV na Twoim urządzeniu.</span></div><button className="primary" onClick={renderEdit} disabled={rendering}>{rendering ? "Rendering..." : "Render edit →"}</button></div>
+          <div className="export-panel"><label>Format<select value={exportFormat} onChange={e=>setExportFormat(e.target.value)}><option value="wav">WAV • bezstratny</option><option value="mp3" disabled>MP3 • wkrótce</option><option value="flac" disabled>FLAC • wkrótce</option></select></label><label>Nazwa pliku<input value={projectName} onChange={e=>setProjectName(e.target.value)} /></label></div><div className="extra-tools"><button className={reverse?"tool active":"tool"} onClick={()=>setReverse(!reverse)}>↩️ {reverse?"Reverse ON":"Reverse"}</button><button className="tool" onClick={()=>{setBass(0);setTreble(0);setReverb(0);setEcho(0);setPitch(0);setWidth(0);setDistortion(0);setLimiter(70);setSpeed(1);}}>↺ Reset effects</button></div><div className="render-box"><div><b>Export {exportFormat.toUpperCase()}</b><span>Efekty są renderowane lokalnie na Twoim urządzeniu.</span></div><button className="primary" onClick={renderEdit} disabled={rendering}>{rendering ? "Rendering..." : "Render edit →"}</button></div>
         </div>}
       </section>}
 

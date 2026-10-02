@@ -33,7 +33,9 @@ export function buildGraph(ctx:AudioContext, source:MediaElementAudioSourceNode,
   splitter.connect(left,0); splitter.connect(right,1);
   left.connect(merger,0,0); right.connect(merger,0,1);
   merger.connect(ctx.destination);
-  return {input, low, high, wet, echoGain, left, right};
+  const distortion=ctx.createWaveShaper(); distortion.curve=null; distortion.oversample="4x";
+  const limiter=ctx.createDynamicsCompressor(); limiter.threshold.value=-2; limiter.knee.value=0; limiter.ratio.value=20; limiter.attack.value=.001; limiter.release.value=.08;
+  return {input, low, high, wet, echoGain, left, right, distortion, limiter};
 }
 
 export async function renderWav(file:File,s:AudioSettings) {
