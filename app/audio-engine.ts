@@ -1,0 +1,77 @@
+export type AudioSettings = {
+  speed:number; volume:number; bass:number; treble:number; reverb:number; echo:number; pitch:number; width:number;
+};
+
+export function makeImpulse(ctx:BaseAudioContext, seconds:number, decay:number) {
+  const length=Math.max(1,Math.floor(ctx.sampleRate*seconds));
+  const buffer=ctx.createBuffer(2,length,ctx.sampleRate);
+  for(let c=0;c<2;c++){const data=buffer.getChannelData(c);for(let i=0;i<length;i++) data[i]=(Math.random()*2-1)*Math.pow(1-i/length,decay);}
+  return buffer;
+}
+
+export function buildGraph(ctx:AudioContext, source:MediaElementAudioSourceNode, s:AudioSettings) {
+  const input=ctx.createGain(); input.gain.value=s.volume;
+  const low=ctx.createBiquadFilter(); low.type="lowshelf"; low.frequency.value=180; low.gain.value=s.bass;
+  const high=ctx.createBiquadFilter(); high.type="highshelf"; high.frequency.value=4200; high.gain.value=s.treble;
+  const dry=ctx.createGain(); dry.gain.value=1;
+  const wet=ctx.createGain(); wet.gain.value=s.reverb/100*.7;
+  const convolver=ctx.createConvolver(); convolver.buffer=makeImpulse(ctx,2.4,2.8);
+  const delay=ctx.createDelay(2); delay.delayTime.value=.12;
+  const echoGain=ctx.createGain(); echoGain.gain.value=s.echo/100*.45;
+  const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-12; comp.knee.value=18; comp.ratio.value=3; comp.attack.value=.005; comp.release.value=.15;
+  const merger=ctx.createChannelMerger(2);
+  const splitter=ctx.createChannelSplitter(2);
+  const left=ctx.createGain(), right=ctx.createGain();
+  const side=Math.min(1,s.width/100);
+  left.gain.value=1+side*.35; right.gain.value=1+side*.35;
+  source.connect(input).connect(low).connect(high);
+  high.connect(dry);
+  high.connect(convolver).connect(wet);
+  high.connect(delay).connect(echoGain);
+  dry.connect(comp); wet.connect(comp); echoGain.connect(comp);
+  comp.connect(splitter);
+  splitter.connect(left,0); splitter.connect(right,1);
+  left.connect(merger,0,0); right.connect(merger,0,1);
+  merger.connect(ctx.destination);
+  return {input};
+}
+
+export async function renderWav(file:File,s:AudioSettings) {
+  const data=await file.arrayBuffer();
+  const probe=new AudioContext();
+  const decoded=await probe.decodeAudioData(data.slice(0));
+  await probe.close();
+  const rate=Math.max(.25,Math.min(3,s.speed*Math.pow(2,s.pitch/12)));
+  const outLength=Math.ceil(decoded.duration/rate*decoded.sampleRate)+decoded.sampleRate*3;
+  const offline=new OfflineAudioContext(2,outLength,decoded.sampleRate);
+  const src=offline.createBufferSource(); src.buffer=decoded; src.playbackRate.value=rate;
+  const input=offline.createGain(); input.gain.value=s.volume;
+  const low=offline.createBiquadFilter(); low.type="lowshelf"; low.frequency.value=180; low.gain.value=s.bass;
+  const high=offline.createBiquadFilter(); high.type="highshelf"; high.frequency.value=4200; high.gain.value=s.treble;
+  const comp=offline.createDynamicsCompressor(); comp.threshold.value=-12; comp.knee.value=18; comp.ratio.value=3; comp.attack.value=.005; comp.release.value=.15;
+  const dry=offline.createGain(); dry.gain.value=1;
+  const wet=offline.createGain(); wet.gain.value=s.reverb/100*.7;
+  const convolver=offline.createConvolver(); convolver.buffer=makeImpulse(offline,2.4,2.8);
+  const delay=offline.createDelay(2); delay.delayTime.value=.12;
+  const echoGain=offline.createGain(); echoGain.gain.value=s.echo/100*.45;
+  const sum=offline.createGain();
+  src.connect(input).connect(low).connect(high);
+  high.connect(dry); high.connect(convolver).connect(wet); high.connect(delay).connect(echoGain);
+  dry.connect(sum); wet.connect(sum); echoGain.connect(sum); sum.connect(comp).connect(offline.destination);
+  src.start(0);
+  const rendered=await offline.startRendering();
+  return audioBufferToWav(rendered);
+}
+
+function audioBufferToWav(buffer:AudioBuffer) {
+  const channels=Math.min(2,buffer.numberOfChannels), length=buffer.length, bytes=44+length*channels*2;
+  const out=new ArrayBuffer(bytes), view=new DataView(out);
+  const write=(o:number,str:string)=>{for(let i=0;i<str.length;i++)view.setUint8(o+i,str.charCodeAt(i));};
+  write(0,"RIFF"); view.setUint32(4,bytes-8,true); write(8,"WAVE"); write(12,"fmt ");
+  view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,channels,true);
+  view.setUint32(24,buffer.sampleRate,true); view.setUint32(28,buffer.sampleRate*channels*2,true);
+  view.setUint16(32,channels*2,true); view.setUint16(34,16,true); write(36,"data"); view.setUint32(40,bytes-44,true);
+  const data=Array.from({length:channels},(_,c)=>buffer.getChannelData(c)); let off=44;
+  for(let i=0;i<length;i++) for(let c=0;c<channels;c++){const v=Math.max(-1,Math.min(1,data[c][i]));view.setInt16(off,v<0?v*32768:v*32767,true);off+=2;}
+  return new Blob([out],{type:"audio/wav"});
+}

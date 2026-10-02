@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AudioSettings, buildGraph, renderWav } from "./audio-engine";
 
 type Tab = "home" | "studio" | "edittok" | "profile";
 type Preset = { name: string; emoji: string; speed: number; bass: number; treble: number; reverb: number; echo: number; width: number };
@@ -47,15 +48,37 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [liked, setLiked] = useState<number[]>([]);
   const [saved, setSaved] = useState(false);
+  const audioCtx = useRef<AudioContext | null>(null);
+  const sourceNode = useRef<MediaElementAudioSourceNode | null>(null);
+  const graphInput = useRef<GainNode | null>(null);
+  const [rendering, setRendering] = useState(false);
+  const settings: AudioSettings = { speed, volume, bass, treble, reverb, echo, pitch, width };
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
   useEffect(() => {
     const a = audio.current;
     if (!a) return;
-    a.playbackRate = speed;
-    a.volume = volume;
-  }, [speed, volume]);
+    const rate = Math.max(.25, Math.min(3, speed * Math.pow(2, pitch / 12)));
+    a.playbackRate = rate;
+    if (graphInput.current) graphInput.current.gain.value = volume;
+  }, [speed, pitch, volume]);
+
+  const connectAudio = async () => {
+    const a = audio.current;
+    if (!a) return;
+    if (!audioCtx.current) audioCtx.current = new AudioContext();
+    if (!sourceNode.current) {
+      sourceNode.current = audioCtx.current.createMediaElementSource(a);
+      graphInput.current = buildGraph(audioCtx.current, sourceNode.current, settings).input;
+    }
+    if (audioCtx.current.state === "suspended") await audioCtx.current.resume();
+  };
+
+  useEffect(() => {
+    if (!sourceNode.current || !audioCtx.current) return;
+    graphInput.current?.gain.setTargetAtTime(volume, audioCtx.current.currentTime, .01);
+  }, [volume]);
 
   const visibleDemos = useMemo(() => demos.filter(d => `${d.title} ${d.user} ${d.tag}`.toLowerCase().includes(query.toLowerCase())), [query]);
 
@@ -73,11 +96,27 @@ export default function Home() {
   const togglePlay = async () => {
     const a = audio.current;
     if (!a) return;
-    if (a.paused) { await a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
+    if (a.paused) { await connectAudio(); await a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
   };
 
   const applyPreset = (p: Preset) => {
     setSpeed(p.speed); setBass(p.bass); setTreble(p.treble); setReverb(p.reverb); setEcho(p.echo); setWidth(p.width);
+  };
+
+  const renderEdit = async () => {
+    if (!file) return;
+    try {
+      setRendering(true);
+      const blob = await renderWav(file, settings);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${file.name.replace(/\.[^/.]+$/, "")}-EDIT-MUSIC.wav`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    } catch (err) {
+      console.error(err);
+      alert("Nie udało się wyrenderować pliku. Spróbuj ponownie.");
+    } finally { setRendering(false); }
   };
 
   const downloadOriginal = () => {
@@ -125,7 +164,7 @@ export default function Home() {
         <div className="section-head"><div><span>STUDIO</span><h2>{file ? file.name : "Create your edit"}</h2></div><button className="secondary" onClick={downloadOriginal} disabled={!file}>⬇ Pobierz oryginał</button></div>
         {!file ? <label className="dropzone">🎧<strong>Wrzuć plik audio</strong><span>MP3, WAV, OGG, M4A i inne</span><input type="file" accept="audio/*" onChange={chooseFile} hidden /></label> :
         <div className="editor">
-          <audio ref={audio} src={url} onLoadedMetadata={e => setDuration(e.currentTarget.duration)} onTimeUpdate={e => setCurrent(e.currentTarget.currentTime)} onEnded={() => setPlaying(false)} />
+          <audio ref={audio} crossOrigin="anonymous" src={url} onLoadedMetadata={e => setDuration(e.currentTarget.duration)} onTimeUpdate={e => setCurrent(e.currentTarget.currentTime)} onEnded={() => setPlaying(false)} />
           <div className="player">
             <button className="play" onClick={togglePlay}>{playing ? "❚❚" : "▶"}</button>
             <div className="track"><div className="waveform">{Array.from({length:48},(_,i)=><i key={i} style={{height:`${16 + ((i*37)%55)}%`}} />)}</div><input type="range" min="0" max={duration || 1} step=".01" value={current} onChange={e => { const v=+e.target.value; setCurrent(v); if(audio.current) audio.current.currentTime=v; }} /><div className="times"><span>{fmt(current)}</span><span>{fmt(duration)}</span></div></div>
@@ -138,7 +177,7 @@ export default function Home() {
               ["Bass",bass,setBass,-50,50],["Treble",treble,setTreble,-50,50],["Reverb",reverb,setReverb,0,100],["Echo / Delay",echo,setEcho,0,100],["Pitch",pitch,setPitch,-12,12],["Stereo Width",width,setWidth,0,100]
             ].map(([name,value,setter,min,max])=><label className="control" key={name}><div><span>{name}</span><b>{String(value)}{name==="Pitch"?" st":""}</b></div><input type="range" min={String(min)} max={String(max)} value={String(value)} onChange={e=>(setter as (v:number)=>void)(+e.target.value)}/></label>)}
           </div>
-          <div className="render-box"><div><b>Export</b><span>WAV export engine is next. Your original audio is ready above.</span></div><button className="primary" onClick={()=>alert("Render/export engine is queued for the next build.")}>Render edit →</button></div>
+          <div className="render-box"><div><b>Export WAV</b><span>Efekty są renderowane do prawdziwego pliku WAV na Twoim urządzeniu.</span></div><button className="primary" onClick={renderEdit} disabled={rendering}>{rendering ? "Rendering..." : "Render edit →"}</button></div>
         </div>}
       </section>}
 
