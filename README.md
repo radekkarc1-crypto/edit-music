@@ -1,3 +1,3 @@
 # EDIT MUSIC
 
-Music editor + EditTok social platform. 🚀
+Music editor + EditTok. 🚀
