@@ -52,6 +52,7 @@ export default function Home() {
   const audioCtx = useRef<AudioContext | null>(null);
   const sourceNode = useRef<MediaElementAudioSourceNode | null>(null);
   const graphInput = useRef<GainNode | null>(null);
+  const graphUpdate = useRef<((next:Partial<AudioSettings>)=>void) | null>(null);
   const [rendering, setRendering] = useState(false);
   const [trimStart,setTrimStart]=useState(0), [trimEnd,setTrimEnd]=useState(0), [fadeIn,setFadeIn]=useState(0), [fadeOut,setFadeOut]=useState(0), [loopCount,setLoopCount]=useState(1);
   const [projectName,setProjectName]=useState("My Edit"), [autoSaved,setAutoSaved]=useState(false);
@@ -82,15 +83,16 @@ export default function Home() {
     if (!audioCtx.current) audioCtx.current = new AudioContext();
     if (!sourceNode.current) {
       sourceNode.current = audioCtx.current.createMediaElementSource(a);
-      graphInput.current = buildGraph(audioCtx.current, sourceNode.current, settings).input;
+      const graph = buildGraph(audioCtx.current, sourceNode.current, settings);
+      graphInput.current = graph.input;
+      graphUpdate.current = graph.update;
     }
     if (audioCtx.current.state === "suspended") await audioCtx.current.resume();
   };
 
   useEffect(() => {
-    if (!sourceNode.current || !audioCtx.current) return;
-    graphInput.current?.gain.setTargetAtTime(volume, audioCtx.current.currentTime, .01);
-  }, [volume]);
+    graphUpdate.current?.({volume,bass,treble,reverb,echo,width,distortion,limiter});
+  }, [volume,bass,treble,reverb,echo,width,distortion,limiter]);
 
   useEffect(()=>{try{const p=JSON.parse(localStorage.getItem("edit-music-project")||"{}"); if(p.projectName)setProjectName(p.projectName); if(typeof p.speed==="number")setSpeed(p.speed); if(typeof p.volume==="number")setVolume(p.volume); if(typeof p.bass==="number")setBass(p.bass); if(typeof p.treble==="number")setTreble(p.treble); if(typeof p.reverb==="number")setReverb(p.reverb); if(typeof p.echo==="number")setEcho(p.echo); if(typeof p.pitch==="number")setPitch(p.pitch); if(typeof p.width==="number")setWidth(p.width); if(typeof p.fadeIn==="number")setFadeIn(p.fadeIn); if(typeof p.fadeOut==="number")setFadeOut(p.fadeOut); if(typeof p.loopCount==="number")setLoopCount(p.loopCount); if(typeof p.distortion==="number")setDistortion(p.distortion); if(typeof p.limiter==="number")setLimiter(p.limiter); if(typeof p.reverse==="boolean")setReverse(p.reverse);}catch{}},[]);
   useEffect(()=>{localStorage.setItem("edit-music-project",JSON.stringify({projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount,distortion,limiter,reverse}));setAutoSaved(true);const t=setTimeout(()=>setAutoSaved(false),700);return()=>clearTimeout(t)},[projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount,distortion,limiter,reverse]);
