@@ -65,6 +65,17 @@ export default function Home() {
   const [accountEmail,setAccountEmail]=useState("");
   const [accountPassword,setAccountPassword]=useState("");
   const [accountMessage,setAccountMessage]=useState("");
+  const [publishOpen,setPublishOpen]=useState(false);
+  const [publishTitle,setPublishTitle]=useState("");
+  const [publishTag,setPublishTag]=useState("#edit");
+  const [allowDownload,setAllowDownload]=useState(true);
+  const [rightsConfirmed,setRightsConfirmed]=useState(false);
+  const [published,setPublished]=useState<any[]>([]);
+  const [commentOpen,setCommentOpen]=useState<number|null>(null);
+  const [comments,setComments]=useState<Record<number,string[]>>({});
+  const [commentText,setCommentText]=useState("");
+  const [playingPost,setPlayingPost]=useState<number|null>(null);
+  const [reports,setReports]=useState<Record<string,boolean>>({});
   const settings: AudioSettings={speed,volume,bass,treble,reverb,echo,pitch,width,trimStart,trimEnd:trimEnd||duration,fadeIn,fadeOut,loopCount,distortion,limiter,reverse};
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -149,6 +160,14 @@ export default function Home() {
     } finally { setRendering(false); }
   };
 
+  const sharePost = async (post:{title:string,user:string}) => {
+    const text = `🎧 ${post.title} by ${post.user} • EDIT MUSIC`;
+    try {
+      if (navigator.share) await navigator.share({title:post.title,text});
+      else await navigator.clipboard.writeText(text);
+    } catch {}
+  };
+
   const togglePostPlay = async (index:number, post:{localUrl?:string}) => {
     if (!post.localUrl) return;
     const player=document.getElementById("edittok-audio-"+index) as HTMLAudioElement|null;
@@ -227,7 +246,7 @@ export default function Home() {
 
       {tab === "edittok" && <section className="page">
         <div className="section-head"><div><span>EDITTOK</span><h2>Discover edits</h2></div><div className="search">⌕ <input placeholder="Szukaj editów..." value={query} onChange={e=>setQuery(e.target.value)} /></div></div>
-        <div className="feed-tabs"><button className={feedMode==="all"?"active":""} onClick={()=>setFeedMode("all")}>✨ Dla Ciebie</button><button className={feedMode==="new"?"active":""} onClick={()=>setFeedMode("new")}>🆕 Nowe</button><button className={feedMode==="popular"?"active":""} onClick={()=>setFeedMode("popular")}>🔥 Popularne</button></div><div className="feed">{visibleDemos.map((d,i)=><article className="edit-card" key={d.title+"-"+i}><div className="cover"><div className="cover-orb">{["🌙","💜","🕶️","☁️"][i%4]}</div><span>♪</span></div><div className="edit-info">{d.localUrl&&<audio id={"edittok-audio-"+i} className="edittok-audio" src={d.localUrl} onEnded={()=>setPlayingPost(null)} preload="metadata" /> }<div className="tag">{d.tag}</div><h3>{d.title}</h3><p>{d.user}</p><div className="card-actions"><button onClick={()=>setLiked(x=>x.includes(i)?x.filter(n=>n!==i):[...x,i])}>{liked.includes(i)?"❤️":"♡"} {d.likes+(liked.includes(i)?1:0)}</button><button onClick={()=>togglePostPlay(i,d)}>{playingPost===i?"❚❚":"▶"} {d.plays}</button><button onClick={()=>setCommentOpen(commentOpen===i?null:i)}>💬 {comments[i]?.length||0}</button><button disabled={d.allowDownload===false} onClick={()=>{if(d.localUrl){const a=document.createElement("a");a.href=d.localUrl;a.download=d.title+".audio";a.click()}}}>⬇ {d.allowDownload===false?"Locked":"Download"}</button><button onClick={()=>{setReports(x=>({...x,[d.title]:!x[d.title]}));alert("Zgłoszenie zapisane lokalnie. Moderacja online będzie dostępna po podłączeniu backendu.")}}>⚑ {reports[d.title]?"Reported":"Report"}</button></div>{commentOpen===i&&<div className="comments"><div>{(comments[i]||[]).map((c,n)=><p key={n}>💬 {c}</p>)}</div><div className="comment-input"><input value={commentText} onChange={e=>setCommentText(e.target.value)} placeholder="Napisz komentarz..."/><button onClick={()=>{if(!commentText.trim())return;setComments(x=>({...x,[i]:[...(x[i]||[]),commentText.trim()]}));setCommentText("")}}>Wyślij</button></div></div>}</div></article>)}</div>
+        <div className="feed-tabs"><button className={feedMode==="all"?"active":""} onClick={()=>setFeedMode("all")}>✨ Dla Ciebie</button><button className={feedMode==="new"?"active":""} onClick={()=>setFeedMode("new")}>🆕 Nowe</button><button className={feedMode==="popular"?"active":""} onClick={()=>setFeedMode("popular")}>🔥 Popularne</button></div><div className="feed">{visibleDemos.map((d,i)=><article className="edit-card" key={d.title+"-"+i}><div className="cover"><div className="cover-orb">{["🌙","💜","🕶️","☁️"][i%4]}</div><span>♪</span></div><div className="edit-info">{d.localUrl&&<audio id={"edittok-audio-"+i} className="edittok-audio" src={d.localUrl} onEnded={()=>setPlayingPost(null)} preload="metadata" /> }<div className="tag">{d.tag}</div><h3>{d.title}</h3><p>{d.user}</p><div className="card-actions"><button onClick={()=>setLiked(x=>x.includes(i)?x.filter(n=>n!==i):[...x,i])}>{liked.includes(i)?"❤️":"♡"} {d.likes+(liked.includes(i)?1:0)}</button><button onClick={()=>togglePostPlay(i,d)}>{playingPost===i?"❚❚":"▶"} {d.plays}</button><button onClick={()=>sharePost(d)}>↗ Share</button><button onClick={()=>setCommentOpen(commentOpen===i?null:i)}>💬 {comments[i]?.length||0}</button><button disabled={d.allowDownload===false} onClick={()=>{if(d.localUrl){const a=document.createElement("a");a.href=d.localUrl;a.download=d.title+".audio";a.click()}}}>⬇ {d.allowDownload===false?"Locked":"Download"}</button><button onClick={()=>{setReports(x=>({...x,[d.title]:!x[d.title]}));alert("Zgłoszenie zapisane lokalnie. Moderacja online będzie dostępna po podłączeniu backendu.")}}>⚑ {reports[d.title]?"Reported":"Report"}</button></div>{commentOpen===i&&<div className="comments"><div>{(comments[i]||[]).map((c,n)=><p key={n}>💬 {c}</p>)}</div><div className="comment-input"><input value={commentText} onChange={e=>setCommentText(e.target.value)} placeholder="Napisz komentarz..."/><button onClick={()=>{if(!commentText.trim())return;setComments(x=>({...x,[i]:[...(x[i]||[]),commentText.trim()]}));setCommentText("")}}>Wyślij</button></div></div>}</div></article>)}</div>
       </section>}
 
       {tab === "profile" && <section className="page profile-page">
