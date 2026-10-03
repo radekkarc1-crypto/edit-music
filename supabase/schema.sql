@@ -116,3 +116,44 @@ create policy "follows own delete" on public.follows for delete to authenticated
 
 create policy "reports own insert" on public.reports for insert to authenticated with check ((select auth.uid()) = reporter_id);
 create policy "reports own read" on public.reports for select to authenticated using ((select auth.uid()) = reporter_id);
+
+
+-- Private audio bucket. Public downloads are never exposed directly.
+insert into storage.buckets (id, name, public)
+values ('edits', 'edits', false)
+on conflict (id) do update set public = false;
+
+create policy "edit audio owner upload"
+on storage.objects for insert to authenticated
+with check (
+  bucket_id = 'edits'
+  and (storage.foldername(name))[1] = (select auth.uid()::text)
+);
+
+create policy "edit audio owner delete"
+on storage.objects for delete to authenticated
+using (
+  bucket_id = 'edits'
+  and owner_id = (select auth.uid())
+);
+
+create policy "edit audio owner read"
+on storage.objects for select to authenticated
+using (
+  bucket_id = 'edits'
+  and owner_id = (select auth.uid())
+);
+
+-- Public EditTok playback is allowed only when the related edit is public.
+-- Download permission is enforced separately by the app before issuing a download URL.
+create policy "public edit audio read"
+on storage.objects for select to authenticated
+using (
+  bucket_id = 'edits'
+  and exists (
+    select 1
+    from public.edits e
+    where e.storage_path = storage.objects.name
+      and e.is_public = true
+  )
+);
