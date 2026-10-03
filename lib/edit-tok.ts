@@ -104,6 +104,12 @@ export async function toggleCloudLike(userId: string, editId: string, liked: boo
   return { error };
 }
 
+export async function incrementCloudPlay(editId: string) {
+  if (!supabase) return { data: null, error: new Error("Supabase nie jest skonfigurowane.") };
+  const { data, error } = await supabase.rpc("increment_edit_play", { p_edit_id: editId });
+  return { data: typeof data === "number" ? data : Number(data ?? 0), error };
+}
+
 export async function listCloudLikes(userId: string) {
   if (!supabase) return { data: [] as string[], error: null };
   const { data, error } = await supabase.from("likes").select("edit_id").eq("user_id", userId);
