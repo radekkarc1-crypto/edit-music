@@ -134,14 +134,14 @@ create policy "edit audio owner delete"
 on storage.objects for delete to authenticated
 using (
   bucket_id = 'edits'
-  and owner_id = (select auth.uid())
+  and owner_id = (select auth.uid()::text)
 );
 
 create policy "edit audio owner read"
 on storage.objects for select to authenticated
 using (
   bucket_id = 'edits'
-  and owner_id = (select auth.uid())
+  and owner_id = (select auth.uid()::text)
 );
 
 -- Public EditTok playback is allowed only when the related edit is public.
