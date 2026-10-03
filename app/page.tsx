@@ -4,7 +4,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AudioSettings, buildGraph, renderWav } from "./audio-engine";
 import { loadAudio, saveAudio } from "./local-db";
 import { getCurrentUser, signIn, signOut, signUp, supabase, supabaseConfigured } from "../lib/supabase";
-import { addCloudComment, createCloudEdit, getEditAudioUrl, listCloudComments, listCloudLikes, listPublicEdits, reportCloudEdit, toggleCloudLike } from "../lib/edit-tok";
+import { addCloudComment, createCloudEdit, getEditAudioUrl, incrementCloudPlay, listCloudComments, listCloudLikes, listPublicEdits, reportCloudEdit, toggleCloudLike } from "../lib/edit-tok";
 import type { User } from "@supabase/supabase-js";
 
 type Tab = "home" | "studio" | "edittok" | "profile";
@@ -197,7 +197,7 @@ export default function Home() {
     } catch {}
   };
 
-  const togglePostPlay = async (index:number, post:{localUrl?:string;plays?:number|string;id?:string}) => {
+  const togglePostPlay = async (index:number, post:{localUrl?:string;plays?:number|string;id?:string;cloud?:boolean}) => {
     if (!post.localUrl) return;
     const player=document.getElementById("edittok-audio-"+index) as HTMLAudioElement|null;
     if (!player) return;
@@ -206,7 +206,17 @@ export default function Home() {
       document.querySelectorAll<HTMLAudioElement>(".edittok-audio").forEach(x=>x.pause());
       await player.play();
       setPlayingPost(index);
-      if(!playedPosts[index]){setPlayedPosts(x=>({...x,[index]:true}));if(typeof post.plays==="number")setPublished(x=>x.map((item:any)=>item.id===post.id?{...item,plays:item.plays+1}:item));}
+      if(!playedPosts[index]){
+        setPlayedPosts(x=>({...x,[index]:true}));
+        if(post.cloud && post.id){
+          const result=await incrementCloudPlay(String(post.id));
+          if(!result.error){
+            setCloudPosts(prev=>prev.map(item=>item.id===post.id?{...item,plays:result.data}:item));
+          }
+        } else if(typeof post.plays==="number"){
+          setPublished(x=>x.map((item:any)=>item.id===post.id?{...item,plays:item.plays+1}:item));
+        }
+      }
     }
   };
 
