@@ -97,7 +97,7 @@ create policy "tracks own update" on public.tracks for update to authenticated u
 create policy "tracks own delete" on public.tracks for delete to authenticated using ((select auth.uid()) = owner_id);
 
 create policy "public edits read" on public.edits for select to anon, authenticated using (is_public or (select auth.uid()) = owner_id);
-create policy "edits own insert" on public.edits for insert to authenticated with check ((select auth.uid()) = owner_id);
+create policy "edits own insert" on public.edits for insert to authenticated with check ((select auth.uid()) = owner_id and rights_confirmed = true);
 create policy "edits own update" on public.edits for update to authenticated using ((select auth.uid()) = owner_id) with check ((select auth.uid()) = owner_id);
 create policy "edits own delete" on public.edits for delete to authenticated using ((select auth.uid()) = owner_id);
 
@@ -147,7 +147,7 @@ using (
 -- Public EditTok playback is allowed only when the related edit is public.
 -- Download permission is enforced separately by the app before issuing a download URL.
 create policy "public edit audio read"
-on storage.objects for select to authenticated
+on storage.objects for select to anon, authenticated
 using (
   bucket_id = 'edits'
   and exists (
