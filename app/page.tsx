@@ -290,7 +290,7 @@ export default function Home() {
       </section>}
 
       {tab === "profile" && <section className="page profile-page">
-        <div className="profile-hero"><div className="avatar">R</div><div><span>@RedzikFN</span><h2>RedzikFN</h2><p>Creator • Music edits • 🎧</p></div><button className="primary">Edit profile</button></div>
+        <div className="profile-hero"><div className="avatar">{(user?.email?.[0]||"R").toUpperCase()}</div><div><span>@{user?.email?.split("@")[0]||"RedzikFN"}</span><h2>{user?.email?.split("@")[0]||"RedzikFN"}</h2><p>{user?"Creator • Music edits • 🎧":"Tryb demonstracyjny • Music edits • 🎧"}</p></div><button className="primary" onClick={()=>setAccountOpen(true)}>Edit profile</button></div>
         <div className="stats"><div><b>3</b><span>Editów</span></div><div><b>12.4K</b><span>Odtworzeń</span></div><div><b>486</b><span>Polubień</span></div><div><b>∞</b><span>Pomysłów</span></div></div>
         <h2>Twoje edity</h2><div className="mini-grid">{demos.slice(0,3).map(d=><div className="mini-card" key={d.title}><div className="cover"><div className="cover-orb">♪</div></div><b>{d.title}</b><span>{d.tag}</span></div>)}</div>
       </section>}
