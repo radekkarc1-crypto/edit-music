@@ -21,7 +21,7 @@ export async function listPublicEdits() {
   if (!supabase) return { data: [] as CloudEdit[], error: null };
   const { data, error } = await supabase
     .from("edits")
-    .select("id,owner_id,title,tag,storage_path,duration_seconds,play_count,allow_download,rights_confirmed,created_at,profiles(username,display_name)")
+    .select("id,owner_id,title,tag,storage_path,duration_seconds,play_count,allow_download,rights_confirmed,created_at,profiles(username,display_name),likes(count)")
     .eq("is_public", true)
     .order("created_at", { ascending: false })
     .limit(50);
