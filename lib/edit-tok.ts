@@ -85,9 +85,13 @@ export async function createCloudEdit(args: {
   return { data: saved as CloudEdit, error: null };
 }
 
-export async function getEditAudioUrl(path: string, seconds = 900) {
+export async function getEditAudioUrl(editId: string, download = false) {
   if (!supabase) return { data: null, error: new Error("Supabase nie jest skonfigurowane.") };
-  return supabase.storage.from(EDITS_BUCKET).createSignedUrl(path, seconds);
+  const { data, error } = await supabase.functions.invoke("get-edit-audio-url", {
+    body: { editId, download },
+  });
+  if (error) return { data: null, error };
+  return { data: data?.url ? { signedUrl: data.url } : null, error: data?.error ? new Error(data.error) : null };
 }
 
 export async function toggleCloudLike(userId: string, editId: string, liked: boolean) {
