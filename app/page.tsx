@@ -171,7 +171,7 @@ export default function Home() {
     } catch {}
   };
 
-  const togglePostPlay = async (index:number, post:{localUrl?:string}) => {
+  const togglePostPlay = async (index:number, post:{localUrl?:string;plays?:number|string;id?:string}) => {
     if (!post.localUrl) return;
     const player=document.getElementById("edittok-audio-"+index) as HTMLAudioElement|null;
     if (!player) return;
