@@ -86,7 +86,7 @@ export default function Home() {
   const settings: AudioSettings={speed,volume,bass,treble,reverb,echo,pitch,width,trimStart,trimEnd:trimEnd||duration,fadeIn,fadeOut,loopCount,distortion,limiter,reverse};
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
-  useEffect(()=>{if(!supabase)return;let active=true;(async()=>{const u=await getCurrentUser();if(active)setUser(u)})();const {data}=supabase.auth.onAuthStateChange((_event,session)=>{if(active)setUser(session?.user??null)});return()=>{active=false;data.subscription.unsubscribe()}},[]);
+  useEffect(()=>{if(!supabase)return;let active=true;const ensureProfile=async(u:User)=>{const base=(u.email?.split("@")[0]||"creator").toLowerCase().replace(/[^a-z0-9_]/g,"").slice(0,24)||"creator";const username=`${base}_${u.id.slice(0,6)}`;await supabase.from("profiles").upsert({id:u.id,username,display_name:u.email?.split("@")[0]||"Creator"},{onConflict:"id"});};(async()=>{const u=await getCurrentUser();if(u){await ensureProfile(u)}if(active)setUser(u)})();const {data}=supabase.auth.onAuthStateChange((_event,session)=>{const u=session?.user??null;if(u)void ensureProfile(u);if(active)setUser(u)});return()=>{active=false;data.subscription.unsubscribe()}},[]);
 
 
   useEffect(() => {
