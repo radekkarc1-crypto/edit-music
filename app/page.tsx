@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AudioSettings, buildGraph, renderWav } from "./audio-engine";
+import { loadAudio, saveAudio } from "./local-db";
 
 type Tab = "home" | "studio" | "edittok" | "profile";
 type Preset = { name: string; emoji: string; speed: number; bass: number; treble: number; reverb: number; echo: number; width: number };
@@ -75,6 +76,8 @@ export default function Home() {
   const [comments,setComments]=useState<Record<number,string[]>>({});
   const [commentText,setCommentText]=useState("");
   const [playingPost,setPlayingPost]=useState<number|null>(null);
+  const [postProgress,setPostProgress]=useState<Record<number,{current:number;duration:number}>>({});
+  const [playedPosts,setPlayedPosts]=useState<Record<number,boolean>>({});
   const [reports,setReports]=useState<Record<string,boolean>>({});
   const settings: AudioSettings={speed,volume,bass,treble,reverb,echo,pitch,width,trimStart,trimEnd:trimEnd||duration,fadeIn,fadeOut,loopCount,distortion,limiter,reverse};
 
@@ -107,7 +110,7 @@ export default function Home() {
 
   useEffect(()=>{try{const p=JSON.parse(localStorage.getItem("edit-music-project")||"{}"); if(p.projectName)setProjectName(p.projectName); if(typeof p.speed==="number")setSpeed(p.speed); if(typeof p.volume==="number")setVolume(p.volume); if(typeof p.bass==="number")setBass(p.bass); if(typeof p.treble==="number")setTreble(p.treble); if(typeof p.reverb==="number")setReverb(p.reverb); if(typeof p.echo==="number")setEcho(p.echo); if(typeof p.pitch==="number")setPitch(p.pitch); if(typeof p.width==="number")setWidth(p.width); if(typeof p.fadeIn==="number")setFadeIn(p.fadeIn); if(typeof p.fadeOut==="number")setFadeOut(p.fadeOut); if(typeof p.loopCount==="number")setLoopCount(p.loopCount); if(typeof p.distortion==="number")setDistortion(p.distortion); if(typeof p.limiter==="number")setLimiter(p.limiter); if(typeof p.reverse==="boolean")setReverse(p.reverse);}catch{}},[]);
   useEffect(()=>{localStorage.setItem("edit-music-project",JSON.stringify({projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount,distortion,limiter,reverse}));setAutoSaved(true);const t=setTimeout(()=>setAutoSaved(false),700);return()=>clearTimeout(t)},[projectName,speed,volume,bass,treble,reverb,echo,pitch,width,fadeIn,fadeOut,loopCount,distortion,limiter,reverse]);
-  useEffect(()=>{try{const p=JSON.parse(localStorage.getItem("edit-music-posts")||"[]");if(Array.isArray(p))setPublished(p)}catch{}},[]);
+  useEffect(()=>{let cancelled=false;(async()=>{try{const raw=JSON.parse(localStorage.getItem("edit-music-posts")||"[]");if(!Array.isArray(raw))return;const restored=await Promise.all(raw.map(async(post:any)=>{if(!post.audioId)return post;const blob=await loadAudio(post.audioId);return blob?{...post,localUrl:URL.createObjectURL(blob)}:post;}));if(!cancelled)setPublished(restored)}catch(e){console.error(e)}})();return()=>{cancelled=true}},[]);
   useEffect(()=>{try{const p=JSON.parse(localStorage.getItem("edit-music-likes")||"[]");if(Array.isArray(p))setLiked(p)}catch{}},[]);
   useEffect(()=>{localStorage.setItem("edit-music-likes",JSON.stringify(liked))},[liked]);
   useEffect(()=>{try{const p=JSON.parse(localStorage.getItem("edit-music-comments")||"{}");if(p&&typeof p==="object")setComments(p)}catch{}},[]);
@@ -142,7 +145,7 @@ export default function Home() {
     setSpeed(p.speed); setBass(p.bass); setTreble(p.treble); setReverb(p.reverb); setEcho(p.echo); setWidth(p.width);
   };
 
-  const publishEdit=()=>{if(!publishTitle.trim()||!file||!rightsConfirmed){alert("Potwierdź, że masz prawa do publikowanego materiału.");return;} const post={title:publishTitle.trim(),user:"@RedzikFN",tag:publishTag.startsWith("#")?publishTag:"#"+publishTag,likes:0,plays:"0",allowDownload,localUrl:url}; setPublished(x=>[post,...x]); setPublishTitle("");setPublishOpen(false);setTab("edittok");};
+  const publishEdit=async()=>{if(!publishTitle.trim()||!file||!rightsConfirmed){alert("Potwierdź, że masz prawa do publikowanego materiału.");return;}const audioId=crypto.randomUUID();try{await saveAudio(audioId,file);const post={id:crypto.randomUUID(),title:publishTitle.trim(),user:"@RedzikFN",tag:publishTag.startsWith("#")?publishTag:"#"+publishTag,likes:0,plays:0,allowDownload,audioId,localUrl:url};setPublished(x=>[post,...x]);setPublishTitle("");setRightsConfirmed(false);setPublishOpen(false);setTab("edittok");}catch(e){console.error(e);alert("Nie udało się zapisać audio w pamięci przeglądarki.");}};
 
   const renderEdit = async () => {
     if (!file) return;
@@ -177,6 +180,7 @@ export default function Home() {
       document.querySelectorAll<HTMLAudioElement>(".edittok-audio").forEach(x=>x.pause());
       await player.play();
       setPlayingPost(index);
+      if(!playedPosts[index]){setPlayedPosts(x=>({...x,[index]:true}));if(typeof post.plays==="number")setPublished(x=>x.map((item:any)=>item.id===post.id?{...item,plays:item.plays+1}:item));}
     }
   };
 
@@ -246,7 +250,7 @@ export default function Home() {
 
       {tab === "edittok" && <section className="page">
         <div className="section-head"><div><span>EDITTOK</span><h2>Discover edits</h2></div><div className="search">⌕ <input placeholder="Szukaj editów..." value={query} onChange={e=>setQuery(e.target.value)} /></div></div>
-        <div className="feed-tabs"><button className={feedMode==="all"?"active":""} onClick={()=>setFeedMode("all")}>✨ Dla Ciebie</button><button className={feedMode==="new"?"active":""} onClick={()=>setFeedMode("new")}>🆕 Nowe</button><button className={feedMode==="popular"?"active":""} onClick={()=>setFeedMode("popular")}>🔥 Popularne</button></div><div className="feed">{visibleDemos.map((d,i)=><article className="edit-card" key={d.title+"-"+i}><div className="cover"><div className="cover-orb">{["🌙","💜","🕶️","☁️"][i%4]}</div><span>♪</span></div><div className="edit-info">{d.localUrl&&<audio id={"edittok-audio-"+i} className="edittok-audio" src={d.localUrl} onEnded={()=>setPlayingPost(null)} preload="metadata" /> }<div className="tag">{d.tag}</div><h3>{d.title}</h3><p>{d.user}</p><div className="card-actions"><button onClick={()=>setLiked(x=>x.includes(i)?x.filter(n=>n!==i):[...x,i])}>{liked.includes(i)?"❤️":"♡"} {d.likes+(liked.includes(i)?1:0)}</button><button onClick={()=>togglePostPlay(i,d)}>{playingPost===i?"❚❚":"▶"} {d.plays}</button><button onClick={()=>sharePost(d)}>↗ Share</button><button onClick={()=>setCommentOpen(commentOpen===i?null:i)}>💬 {comments[i]?.length||0}</button><button disabled={d.allowDownload===false} onClick={()=>{if(d.localUrl){const a=document.createElement("a");a.href=d.localUrl;a.download=d.title+".audio";a.click()}}}>⬇ {d.allowDownload===false?"Locked":"Download"}</button><button onClick={()=>{setReports(x=>({...x,[d.title]:!x[d.title]}));alert("Zgłoszenie zapisane lokalnie. Moderacja online będzie dostępna po podłączeniu backendu.")}}>⚑ {reports[d.title]?"Reported":"Report"}</button></div>{commentOpen===i&&<div className="comments"><div>{(comments[i]||[]).map((c,n)=><p key={n}>💬 {c}</p>)}</div><div className="comment-input"><input value={commentText} onChange={e=>setCommentText(e.target.value)} placeholder="Napisz komentarz..."/><button onClick={()=>{if(!commentText.trim())return;setComments(x=>({...x,[i]:[...(x[i]||[]),commentText.trim()]}));setCommentText("")}}>Wyślij</button></div></div>}</div></article>)}</div>
+        <div className="feed-tabs"><button className={feedMode==="all"?"active":""} onClick={()=>setFeedMode("all")}>✨ Dla Ciebie</button><button className={feedMode==="new"?"active":""} onClick={()=>setFeedMode("new")}>🆕 Nowe</button><button className={feedMode==="popular"?"active":""} onClick={()=>setFeedMode("popular")}>🔥 Popularne</button></div><div className="feed">{visibleDemos.map((d,i)=><article className="edit-card" key={d.title+"-"+i}><div className="cover"><div className="cover-orb">{["🌙","💜","🕶️","☁️"][i%4]}</div><span>♪</span></div><div className="edit-info">{d.localUrl&&<audio id={"edittok-audio-"+i} className="edittok-audio" src={d.localUrl} onLoadedMetadata={e=>setPostProgress(x=>({...x,[i]:{current:x[i]?.current||0,duration:e.currentTarget.duration}}))} onTimeUpdate={e=>setPostProgress(x=>({...x,[i]:{current:e.currentTarget.currentTime,duration:e.currentTarget.duration}}))} onEnded={()=>setPlayingPost(null)} preload="metadata" /> }<div className="tag">{d.tag}</div><h3>{d.title}</h3><p>{d.user}</p><div className="card-actions"><button onClick={()=>setLiked(x=>x.includes(i)?x.filter(n=>n!==i):[...x,i])}>{liked.includes(i)?"❤️":"♡"} {d.likes+(liked.includes(i)?1:0)}</button><button onClick={()=>togglePostPlay(i,d)}>{playingPost===i?"❚❚":"▶"} {d.plays}</button>{d.localUrl&&<div className="post-progress"><input type="range" min="0" max={postProgress[i]?.duration||1} step=".01" value={postProgress[i]?.current||0} onChange={e=>{const v=+e.target.value;const a=document.getElementById("edittok-audio-"+i) as HTMLAudioElement|null;if(a)a.currentTime=v;setPostProgress(x=>({...x,[i]:{current:v,duration:x[i]?.duration||1}}))}}/><span>{fmt(postProgress[i]?.current||0)} / {fmt(postProgress[i]?.duration||0)}</span></div>}<button onClick={()=>sharePost(d)}>↗ Share</button><button onClick={()=>setCommentOpen(commentOpen===i?null:i)}>💬 {comments[i]?.length||0}</button><button disabled={d.allowDownload===false} onClick={()=>{if(d.localUrl){const a=document.createElement("a");a.href=d.localUrl;a.download=d.title+".audio";a.click()}}}>⬇ {d.allowDownload===false?"Locked":"Download"}</button><button onClick={()=>{setReports(x=>({...x,[d.title]:!x[d.title]}));alert("Zgłoszenie zapisane lokalnie. Moderacja online będzie dostępna po podłączeniu backendu.")}}>⚑ {reports[d.title]?"Reported":"Report"}</button></div>{commentOpen===i&&<div className="comments"><div>{(comments[i]||[]).map((c,n)=><p key={n}>💬 {c}</p>)}</div><div className="comment-input"><input value={commentText} onChange={e=>setCommentText(e.target.value)} placeholder="Napisz komentarz..."/><button onClick={()=>{if(!commentText.trim())return;setComments(x=>({...x,[i]:[...(x[i]||[]),commentText.trim()]}));setCommentText("")}}>Wyślij</button></div></div>}</div></article>)}</div>
       </section>}
 
       {tab === "profile" && <section className="page profile-page">
